@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Research Paper Reviewer Documentation</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        color: #0f172a;
+        margin: 36px;
+        line-height: 1.55;
+      }
+      h1, h2, h3 {
+        color: #0f172a;
+      }
+      h1 {
+        border-bottom: 3px solid #1d4ed8;
+        padding-bottom: 10px;
+        margin-bottom: 24px;
+      }
+      h2 {
+        margin-top: 28px;
+        border-bottom: 1px solid #cbd5e1;
+        padding-bottom: 6px;
+      }
+      code, pre {
+        font-family: "Courier New", monospace;
+      }
+      pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 16px;
+        border-radius: 10px;
+        white-space: pre-wrap;
+      }
+      ul {
+        margin-top: 8px;
+      }
+      .muted {
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AI Research Paper Reviewer Documentation</h1>
+    <p class="muted">
+      Technical documentation bundle for the FastAPI, LangGraph, Gemini, Semantic Scholar, and React-based research paper review platform.
+    </p>
+
+    <h2>1. System Overview</h2>
+    <p>
+      AI Research Paper Reviewer accepts a research paper by direct PDF upload or arXiv URL, extracts paper content,
+      enriches it with related literature from Semantic Scholar, evaluates it through a two-node LangGraph workflow
+      backed by Google Gemini, stores the structured result in SQLite, and renders the final report in a React UI.
+    </p>
+    <ul>
+      <li>FastAPI backend for orchestration, persistence, progress streaming, and PDF generation</li>
+      <li>React frontend for upload, history browsing, live progress, and report display</li>
+      <li>LangGraph pipeline with exactly two nodes: research and review</li>
+      <li>Persistent raw Gemini outputs for debugging and auditability</li>
+    </ul>
+
+    <h2>2. Main Runtime Flow</h2>
+    <pre>User -> Frontend UploadZone -> POST /api/review -> FastAPI start_review
+-> create Review + ProgressEvent -> run_pipeline(...) in background
+-> LangGraph review_graph
+-> research_node
+   -> extract_paper(...)
+   -> search_related_papers(...)
+   -> Gemini Flash
+-> review_node
+   -> Gemini Pro
+-> persist results + PDF generation
+-> SSE progress stream completes
+-> Frontend fetches GET /api/review/{id}
+-> User sees report and raw Gemini outputs</pre>
+
+    <h2>3. Developer Sequence Diagram</h2>
+    <pre>User
+  |
+  | 1. Upload PDF or paste arXiv URL
+  v
+Frontend UploadZone
+  |
+  | 2. POST /api/review
+  v
+FastAPI Route: start_review
+  |
+  | 3. Validate input, rate-limit, create Review row
+  | 4. Insert initial ProgressEvent
+  | 5. Launch run_pipeline(review_id, ...)
+  v
+Background Pipeline
+  |
+  | 6. Mark review as processing
+  | 7. Build initial AgentState
+  | 8. Invoke LangGraph
+  v
+LangGraph
+  |
+  | 9. research_node
+  |    - extract paper
+  |    - search related literature
+  |    - call Gemini Flash
+  |    - store raw research response in state
+  |
+  | 10. review_node
+  |     - build consolidated review prompt
+  |     - call Gemini Pro
+  |     - validate JSON and flaws
+  |     - store raw review response in state
+  v
+Pipeline Persistence
+  |
+  | 11. Save review fields to DB
+  | 12. Save dimension scores
+  | 13. Save related papers
+  | 14. Generate review PDF
+  | 15. Mark review complete
+  | 16. Insert final ProgressEvent
+  v
+SSE Endpoint
+  |
+  | 17. Frontend EventSource consumes progress updates
+  v
+Frontend ReviewProgress -> Frontend ReviewReport -> User sees final report</pre>
+
+    <h2>4. Backend Components</h2>
+    <ul>
+      <li><strong>Configuration:</strong> <code>backend/core/config.py</code></li>
+      <li><strong>Database:</strong> <code>backend/core/database.py</code></li>
+      <li><strong>Models:</strong> <code>backend/models/database.py</code></li>
+      <li><strong>API:</strong> <code>backend/api/routes/reviews.py</code></li>
+      <li><strong>Graph:</strong> <code>backend/agent/graph.py</code></li>
+      <li><strong>State:</strong> <code>backend/agent/state.py</code></li>
+      <li><strong>Nodes:</strong> <code>backend/agent/nodes/research_node.py</code>, <code>review_node.py</code></li>
+      <li><strong>Services:</strong> <code>pdf_extractor.py</code>, <code>lit_search.py</code>, <code>pdf_generator.py</code></li>
+    </ul>
+
+    <h2>5. Frontend Components</h2>
+    <ul>
+      <li><strong>App shell:</strong> <code>frontend/src/App.tsx</code></li>
+      <li><strong>API client:</strong> <code>frontend/src/api/client.ts</code></li>
+      <li><strong>State store:</strong> <code>frontend/src/stores/reviewStore.ts</code></li>
+      <li><strong>SSE hook:</strong> <code>frontend/src/hooks/useSSE.ts</code></li>
+      <li><strong>Main UI:</strong> sidebar, upload, progress, report, score gauge</li>
+    </ul>
+
+    <h2>6. API Surface</h2>
+    <ul>
+      <li><code>GET /health</code></li>
+      <li><code>POST /api/review</code></li>
+      <li><code>GET /api/progress/{review_id}</code></li>
+      <li><code>GET /api/reviews</code></li>
+      <li><code>GET /api/review/{review_id}</code></li>
+      <li><code>GET /api/review/{review_id}/pdf</code></li>
+      <li><code>DELETE /api/review/{review_id}</code></li>
+    </ul>
+
+    <h2>7. Database Schema Summary</h2>
+    <ul>
+      <li><code>reviews</code>: top-level review metadata and outputs</li>
+      <li><code>review_dimension_scores</code>: six-dimension scoring details</li>
+      <li><code>related_papers</code>: Semantic Scholar paper list</li>
+      <li><code>progress_events</code>: streamed progress messages</li>
+    </ul>
+
+    <h2>8. Operational Notes</h2>
+    <ul>
+      <li>Use Python 3.11+</li>
+      <li>Run <code>alembic upgrade head</code> before starting the backend</li>
+      <li>WeasyPrint may need native OS libraries for real PDF rendering</li>
+      <li>Older SQLite databases are patched for compatibility at backend startup</li>
+    </ul>
+
+    <h2>9. Troubleshooting Summary</h2>
+    <ul>
+      <li>Missing Gemini key: check root <code>.env</code></li>
+      <li>Missing debug columns: run migrations or restart backend for compatibility patch</li>
+      <li>Stuck processing: inspect backend traceback and raw Gemini outputs on the review page</li>
+      <li>Frontend cannot connect: confirm backend on <code>localhost:8000</code></li>
+    </ul>
+  </body>
+  </html>
