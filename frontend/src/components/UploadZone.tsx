@@ -74,7 +74,7 @@ export function UploadZone() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-[36px] bg-white/90 p-8 shadow-panel backdrop-blur">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-[36px] border border-slate-100 bg-white/90 p-8 shadow-xl backdrop-blur">
       <div className="text-center">
         <h1 className="text-4xl font-bold tracking-tight text-slate-900">AI Research Reviewer</h1>
         <p className="mt-3 text-slate-500">Upload a manuscript or paste an arXiv URL to generate a structured peer review with live progress updates.</p>
@@ -101,11 +101,12 @@ export function UploadZone() {
         }`}
       >
         <div className="flex flex-col items-center gap-4">
-          <div className="rounded-full bg-slate-900 p-4 text-white">
-            <Upload className="h-8 w-8" />
+          <div className="rounded-full bg-slate-100 p-4 text-slate-400">
+            <Upload className={`h-10 w-10 ${dragging ? 'animate-pulse' : ''}`} />
           </div>
           <div className="text-2xl font-semibold text-slate-800">Drop a PDF here</div>
-          <div className="text-sm text-slate-500">or click to browse</div>
+          <div className="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-700">or click to browse</div>
+          <div className="text-xs text-slate-400">Accepts PDF files up to 50MB</div>
         </div>
       </button>
 
@@ -133,13 +134,13 @@ export function UploadZone() {
           value={arxivUrl}
           onChange={(event) => setArxivUrl(event.target.value)}
           placeholder="Paste arXiv URL (e.g. https://arxiv.org/abs/2503.08569)"
-          className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm outline-none transition focus:border-blue-400"
+          className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500"
         />
         <button
           type="button"
           disabled={submitting}
           onClick={() => void startArxivReview()}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
           Review

@@ -12,11 +12,10 @@ from agent.errors import format_model_error, is_expected_model_auth_error
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
-from services.lit_search import search_related_papers
+from services.lit_search import detect_publication_duplicate, search_related_papers
 from services.pdf_extractor import extract_paper
 
 logger = logging.getLogger(__name__)
-
 
 def _strip_json_fences(raw_text: str) -> str:
     """Remove markdown fences from model output when present."""
@@ -28,6 +27,63 @@ def _strip_json_fences(raw_text: str) -> str:
         if text.startswith("json"):
             text = text[4:]
     return text.strip()
+
+
+def _duplicate_publication_result(state: dict, publication_check: dict, related: list[dict]) -> dict:
+    """Build a terminal rejection result without calling the review model."""
+    matched_title = publication_check.get("matched_title") or state.get("title") or "the submitted manuscript"
+    matched_year = publication_check.get("matched_year") or "N/A"
+    matched_venue = publication_check.get("matched_venue") or "Semantic Scholar"
+    confidence = publication_check.get("duplicate_confidence", "high")
+    evidence = (
+        "Related Literature / Semantic Scholar: exact or near-exact title match "
+        f"'{matched_title}' ({matched_year}, {matched_venue}); duplicate confidence: {confidence}."
+    )
+    summary = (
+        "The submitted manuscript appears to be an already published paper. "
+        "Because a confirmed publication match is a terminal publication-ethics and originality issue, "
+        "the system stopped before running the full AI peer-review stage."
+    )
+    comments = (
+        f"{summary} The matched record was '{matched_title}' ({matched_year}, {matched_venue}). "
+        "This submission should not be evaluated as a new manuscript unless the user explicitly intends a "
+        "post-publication assessment rather than a publication recommendation."
+    )
+    return {
+        "research_analysis": {
+            "document_type_valid": True,
+            "field": state.get("field") or "Publication ethics",
+            "novelty_score": 0,
+            "publication_check": publication_check,
+            "novelty_warning": "Already-published manuscript detected before Gemini review.",
+        },
+        "field": "Publication ethics",
+        "dimension_scores": [],
+        "overall_score": None,
+        "recommendation": "Reject",
+        "summary": summary,
+        "general_comments": comments,
+        "major_flaws": [
+            {
+                "issue": "Already-published manuscript detected",
+                "evidence": evidence,
+                "remedy": (
+                    "This flaw is non-remediable for a new-manuscript submission. "
+                    "Withdraw or reject the submission and follow duplicate-publication ethics guidance."
+                ),
+            }
+        ],
+        "minor_points": [],
+        "related_papers": related,
+        "research_llm_raw_output": json.dumps(
+            {
+                "publication_check": publication_check,
+                "action": "Skipped Gemini novelty and peer-review calls because the manuscript appears already published.",
+            }
+        ),
+        "review_llm_raw_output": "",
+        "status": "complete",
+    }
 
 
 async def research_node(state: AgentState) -> dict:
@@ -71,6 +127,19 @@ async def research_node(state: AgentState) -> dict:
             f"Found {len(related)} related papers on Semantic Scholar"
         )
 
+        publication_check = detect_publication_duplicate(
+            title=paper["title"],
+            authors=paper["authors"],
+            related_papers=related,
+        )
+        updates["publication_check"] = publication_check
+        if publication_check.get("status") == "already_published":
+            updates["progress_messages"].append(
+                "Already-published title match detected in Semantic Scholar; skipping Gemini review"
+            )
+            updates.update(_duplicate_publication_result(updates, publication_check, related))
+            return updates
+
         updates["progress_messages"].append("Analysing research field and novelty...")
         llm = ChatGoogleGenerativeAI(
             model=settings.GEMINI_FLASH_MODEL,
@@ -84,6 +153,9 @@ async def research_node(state: AgentState) -> dict:
 Related papers from Semantic Scholar:
 {json.dumps([{"title": p["title"], "abstract": p.get("abstract_snippet", ""), "year": p.get("year")} for p in related[:8]], indent=2)}
 
+Publication duplicate check:
+{json.dumps(publication_check, indent=2)}
+
 Analyse the novelty and field of this paper."""
 
         response = await llm.ainvoke(
@@ -96,6 +168,12 @@ Analyse the novelty and field of this paper."""
         updates["research_llm_raw_output"] = raw_output
         novelty_data = json.loads(_strip_json_fences(raw_output))
         updates["research_analysis"] = novelty_data
+        if publication_check.get("status") == "already_published":
+            novelty_data["publication_check"] = publication_check
+            novelty_data["novelty_warning"] = (
+                "Semantic Scholar returned an exact or near-exact title match. "
+                "Treat the manuscript as already published unless the user explicitly requested post-publication analysis."
+            )
         updates["field"] = novelty_data.get("field", "General Science")
         if novelty_data.get("document_type_valid") is False:
             detected_type = novelty_data.get("document_type_detected") or "non-research document"

@@ -48,7 +48,7 @@ research-reviewer/
 ```bash
 git clone <repo>
 cd research-reviewer
-touch .env
+cp .env.example .env
 ```
 
 Edit `.env` and provide real values for at least:
@@ -62,7 +62,20 @@ OUTPUTS_DIR=outputs
 UPLOADS_DIR=uploads
 MAX_PDF_SIZE_MB=50
 ENVIRONMENT=development
+SECRET_KEY=change-this-to-a-random-32-char-string-in-production
 ```
+
+## Default Credentials — Change Immediately
+
+The first backend startup seeds a local admin account if no users exist:
+
+```text
+Email:    admin@login.com
+Password: admin
+Role:     admin
+```
+
+Log in at `/login` and change this password before using the app beyond local development.
 
 ### 2. Optional: Start GROBID
 

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     UPLOADS_DIR: str = "uploads"
     MAX_PDF_SIZE_MB: int = 50
     ENVIRONMENT: str = "development"
+    SECRET_KEY: str = "change-this-in-production-min-32-chars"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
 
     def get_outputs_path(self) -> Path:
         """Ensure the outputs directory exists and return it."""

@@ -18,8 +18,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("reviews", sa.Column("research_llm_raw_output", sa.Text(), nullable=True))
-    op.add_column("reviews", sa.Column("review_llm_raw_output", sa.Text(), nullable=True))
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("reviews")}
+    if "research_llm_raw_output" not in columns:
+        op.add_column("reviews", sa.Column("research_llm_raw_output", sa.Text(), nullable=True))
+    if "review_llm_raw_output" not in columns:
+        op.add_column("reviews", sa.Column("review_llm_raw_output", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:

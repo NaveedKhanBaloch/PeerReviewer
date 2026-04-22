@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -36,6 +36,34 @@ class Recommendation(str, enum.Enum):
     reject = "Reject"
 
 
+class UserRole(str, enum.Enum):
+    """Application user roles."""
+
+    admin = "admin"
+    user = "user"
+
+
+class User(Base):
+    """User account for optional authentication and administration."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    full_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False, default=UserRole.user)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    organisation: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    reviews: Mapped[List["Review"]] = relationship(back_populates="created_by_user")
+
+
 class Review(Base):
     """Primary review record."""
 
@@ -48,6 +76,7 @@ class Review(Base):
     field: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     arxiv_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    created_by_user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
     status: Mapped[ReviewStatus] = mapped_column(
         Enum(ReviewStatus, name="review_status"),
         nullable=False,
@@ -87,6 +116,7 @@ class Review(Base):
         back_populates="review",
         cascade="all, delete-orphan",
     )
+    created_by_user: Mapped[Optional[User]] = relationship(back_populates="reviews")
 
 
 class ReviewDimensionScore(Base):

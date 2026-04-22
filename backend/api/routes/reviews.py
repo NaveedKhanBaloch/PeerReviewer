@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_optional_user
 from agent.graph import review_graph
 from core.config import settings
 from core.database import AsyncSessionLocal, get_db
@@ -27,6 +28,7 @@ from models.database import (
     Review,
     ReviewDimensionScore,
     ReviewStatus,
+    User,
 )
 from models.schemas import (
     DimensionScoreOut,
@@ -67,10 +69,22 @@ def _sanitize_filename(value: str) -> str:
 
 def _extract_arxiv_id(arxiv_url: str) -> str:
     """Parse an arXiv identifier from a supported URL."""
-    match = re.search(r"arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+)(?:v\d+)?", arxiv_url)
+    match = re.match(r"https?://arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?/?$", arxiv_url.strip())
     if not match:
-        raise HTTPException(status_code=400, detail="Invalid arXiv URL.")
+        raise HTTPException(status_code=400, detail="Invalid arXiv URL. Format: https://arxiv.org/abs/XXXX.XXXXX")
     return match.group(1)
+
+
+def _validate_pdf_file(file: UploadFile, paper_bytes: bytes) -> None:
+    """Validate PDF content type, magic bytes, and size."""
+    filename = file.filename or "paper.pdf"
+    if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be a PDF.")
+    if not paper_bytes.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
+    max_bytes = settings.MAX_PDF_SIZE_MB * 1024 * 1024
+    if len(paper_bytes) > max_bytes:
+        raise HTTPException(status_code=413, detail="Uploaded PDF exceeds size limit.")
 
 
 def _parse_json_list(payload: Optional[str]) -> list:
@@ -194,6 +208,7 @@ async def run_pipeline(review_id: str, paper_bytes: Optional[bytes], arxiv_id: O
                 "field": "",
                 "research_analysis": {},
                 "related_papers": [],
+                "publication_check": {},
                 "research_llm_raw_output": "",
                 "dimension_scores": [],
                 "overall_score": 0.0,
@@ -259,6 +274,7 @@ async def start_review(
     request: Request,
     file: Optional[UploadFile] = File(default=None),
     arxiv_url: Optional[str] = Form(default=None),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """Start a new review from a PDF upload or arXiv URL."""
@@ -275,12 +291,8 @@ async def start_review(
 
     if file is not None:
         filename = file.filename or "paper.pdf"
-        if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Uploaded file must be a PDF.")
         paper_bytes = await file.read()
-        max_bytes = settings.MAX_PDF_SIZE_MB * 1024 * 1024
-        if len(paper_bytes) > max_bytes:
-            raise HTTPException(status_code=413, detail="Uploaded PDF exceeds size limit.")
+        _validate_pdf_file(file, paper_bytes)
         sanitized_name = _sanitize_filename(Path(filename).name)
         upload_dir = Path(settings.UPLOADS_DIR)
         upload_dir.mkdir(exist_ok=True)
@@ -295,6 +307,7 @@ async def start_review(
         title=title,
         source=source,
         arxiv_id=arxiv_id,
+        created_by_user_id=current_user.id if current_user else None,
         status=ReviewStatus.pending,
     )
     db.add(review)
@@ -353,11 +366,20 @@ async def stream_progress(review_id: str) -> StreamingResponse:
 
 
 @router.get("/reviews", response_model=list[ReviewListItem])
-async def list_reviews(limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)) -> List[ReviewListItem]:
+async def list_reviews(
+    limit: int = 50,
+    offset: int = 0,
+    mine: bool = False,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[ReviewListItem]:
     """Return recent non-deleted reviews for the sidebar."""
+    filters = [Review.deleted_at.is_(None)]
+    if mine and current_user is not None:
+        filters.append(Review.created_by_user_id == current_user.id)
     result = await db.execute(
         select(Review)
-        .where(Review.deleted_at.is_(None))
+        .where(*filters)
         .order_by(Review.created_at.desc())
         .offset(offset)
         .limit(limit)

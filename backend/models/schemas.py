@@ -3,15 +3,157 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+def _validate_password(value: str) -> str:
+    if len(value) < 8 or not re.search(r"[A-Z]", value) or not re.search(r"\d", value):
+        raise ValueError("Password must be at least 8 characters and include 1 uppercase letter and 1 number.")
+    return value
+
+
+def _validate_username(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_]{3,50}", value):
+        raise ValueError("Username must be 3-50 characters: letters, numbers, underscores only.")
+    return value
 
 
 class ReviewRequest(BaseModel):
     """Request body for an arXiv-based review."""
 
     arxiv_url: Optional[str] = None
+
+
+class UserCreate(BaseModel):
+    """Payload for creating users."""
+
+    email: EmailStr
+    username: str
+    full_name: Optional[str] = None
+    password: str
+    organisation: Optional[str] = None
+    role: Optional[str] = "user"
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        return _validate_username(value)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class UserUpdate(BaseModel):
+    """Payload for updating profile fields."""
+
+    full_name: Optional[str] = None
+    organisation: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class AdminUserUpdate(UserUpdate):
+    """Admin-only user update payload."""
+
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class UserOut(BaseModel):
+    """Authenticated user response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    username: str
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+    organisation: Optional[str]
+    avatar_url: Optional[str]
+    created_at: datetime
+    last_login: Optional[datetime]
+
+
+class UserListItem(BaseModel):
+    """Admin user list item."""
+
+    id: str
+    email: str
+    username: str
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+    organisation: Optional[str]
+    created_at: datetime
+    last_login: Optional[datetime]
+    total_reviews: int
+
+
+class TokenResponse(BaseModel):
+    """Auth token response."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class LoginRequest(BaseModel):
+    """Email/password login request."""
+
+    email: EmailStr
+    password: str
+
+
+class RefreshRequest(BaseModel):
+    """Refresh-token request."""
+
+    refresh_token: str
+
+
+class PasswordChange(BaseModel):
+    """Own password change request."""
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class AdminPasswordReset(BaseModel):
+    """Admin password reset request."""
+
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class UsersPage(BaseModel):
+    """Paginated admin users response."""
+
+    users: List[UserListItem]
+    total: int
+
+
+class AdminStats(BaseModel):
+    """Admin dashboard statistics."""
+
+    total_users: int
+    active_users: int
+    total_reviews: int
+    reviews_this_month: int
 
 
 class DimensionScoreOut(BaseModel):

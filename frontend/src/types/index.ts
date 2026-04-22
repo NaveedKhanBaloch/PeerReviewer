@@ -7,6 +7,68 @@ export interface ReviewListItem {
   overall_score: number | null;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  full_name: string | null;
+  role: 'admin' | 'user';
+  is_active: boolean;
+  organisation: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  last_login: string | null;
+}
+
+export interface AuthState {
+  user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user: User;
+}
+
+export interface UserCreate {
+  email: string;
+  username: string;
+  full_name?: string | null;
+  password: string;
+  organisation?: string | null;
+  role?: 'admin' | 'user';
+}
+
+export interface UserUpdate {
+  full_name?: string | null;
+  organisation?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface UserListItem {
+  id: string;
+  email: string;
+  username: string;
+  full_name: string | null;
+  role: 'admin' | 'user';
+  is_active: boolean;
+  organisation: string | null;
+  created_at: string;
+  last_login: string | null;
+  total_reviews: number;
+}
+
+export interface AdminStats {
+  total_users: number;
+  active_users: number;
+  total_reviews: number;
+  reviews_this_month: number;
+}
+
 export interface DimensionScore {
   dimension: string;
   score: number;

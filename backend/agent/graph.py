@@ -8,8 +8,8 @@ from agent.state import AgentState
 
 
 def _route_after_research(state: AgentState) -> str:
-    """Skip review generation if extraction or novelty analysis failed."""
-    return "failed" if state.get("status") == "failed" else "review"
+    """Skip review generation for failed or terminal research-node outcomes."""
+    return "review" if state.get("status") == "processing" else "end"
 
 
 def build_review_graph():
@@ -21,7 +21,7 @@ def build_review_graph():
     graph.add_conditional_edges(
         "research_node",
         _route_after_research,
-        {"failed": END, "review": "review_node"},
+        {"end": END, "review": "review_node"},
     )
     graph.add_edge("review_node", END)
     return graph.compile()

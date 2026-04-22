@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, BookOpen, ChevronDown, ChevronUp, Download, FileText, Info, MessageSquare } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
@@ -23,15 +23,17 @@ function recommendationLabel(status: string, recommendation: string | null, over
 function Section({
   title,
   children,
+  icon,
 }: {
   title: string;
   children: ReactNode;
+  icon?: ReactNode;
 }) {
   const [open, setOpen] = useState(true);
   return (
-    <section className="rounded-3xl bg-white p-6 shadow-sm">
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between text-left">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+    <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between border-b border-slate-100 pb-3 text-left transition-all duration-200">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">{icon}{title}</h2>
         {open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
       </button>
       {open ? <div className="mt-4">{children}</div> : null}
@@ -63,10 +65,13 @@ export function ReviewReport() {
 
   const scoreLabel = data.overall_score === null ? 'N/A' : data.overall_score.toFixed(1);
   const showScoreSuffix = data.overall_score !== null;
+  const alreadyPublished = data.major_flaws.some((flaw) => flaw.issue.toLowerCase().includes('already-published'))
+    || data.summary?.toLowerCase().includes('already published paper')
+    || data.related_papers.some((paper) => paper.relevance_note?.toLowerCase().includes('already published match'));
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-10 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm backdrop-blur">
+      <div className="sticky top-0 z-10 rounded-3xl border border-slate-100 bg-white/95 p-6 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <h1 className="line-clamp-2 text-2xl font-bold text-slate-900">{data.title}</h1>
@@ -75,14 +80,14 @@ export function ReviewReport() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`rounded-full px-4 py-2 text-sm font-semibold ${badgeClass(data.recommendation)}`}>
+            <span className={`rounded-full px-4 py-1.5 text-sm font-semibold tracking-wide ${badgeClass(data.recommendation)}`}>
               {recommendationLabel(data.status, data.recommendation, data.overall_score)}
             </span>
             <a
               href={api.getPdfUrl(data.id)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700"
+              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
             >
               <Download className="h-4 w-4" />
               Download PDF
@@ -91,35 +96,51 @@ export function ReviewReport() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_3fr]">
-        <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-panel">
-          <div className="text-sm uppercase tracking-[0.2em] text-slate-400">Overall Score</div>
-          <div className="mt-3 text-5xl font-bold">
-            {scoreLabel} {showScoreSuffix ? <span className="text-xl font-medium text-slate-300">/ 10</span> : null}
+      {alreadyPublished ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-1 h-5 w-5 flex-none text-red-600" />
+            <div>
+              <h2 className="text-lg font-semibold">This paper is already published</h2>
+              <p className="mt-2 leading-7">
+                A matching published record was found in Semantic Scholar. The system stopped the review process and did not run the full Gemini peer-review stage.
+              </p>
+            </div>
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {data.dimension_scores.map((score) => (
-            <ScoreGauge key={score.dimension} dimension={score.dimension} score={score.score} />
-          ))}
-        </div>
-      </div>
+      ) : null}
 
-      <Section title="Summary">
+      {!alreadyPublished ? (
+        <div className="grid gap-4 rounded-2xl bg-slate-50 p-6 xl:grid-cols-[1.2fr_3fr]">
+          <div className="rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white shadow-panel">
+            <div className="text-sm uppercase tracking-[0.2em] text-slate-400">Overall Score</div>
+            <div className="mt-3 text-5xl font-bold">
+              {scoreLabel} {showScoreSuffix ? <span className="text-xl font-medium text-slate-400">/ 10</span> : null}
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {data.dimension_scores.map((score) => (
+              <ScoreGauge key={score.dimension} dimension={score.dimension} score={score.score} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <Section title="Summary" icon={<FileText className="h-4 w-4" />}>
         <div className="rounded-2xl bg-blue-50 p-5 leading-7 text-slate-700">{data.summary}</div>
       </Section>
 
-      <Section title="General Comments">
+      <Section title="General Comments" icon={<MessageSquare className="h-4 w-4" />}>
         <div className="leading-7 text-slate-700">{data.general_comments}</div>
       </Section>
 
-      <Section title="Major Flaws">
+      <Section title="Major Flaws" icon={<AlertTriangle className="h-4 w-4 text-red-500" />}>
         <div className="space-y-4">
           {data.major_flaws.length === 0 ? (
             <div className="text-slate-500">No major flaws were recorded.</div>
           ) : (
             data.major_flaws.map((flaw, index) => (
-              <div key={`${flaw.issue}-${index}`} className="rounded-2xl border-l-4 border-red-400 bg-red-50 p-5">
+              <div key={`${flaw.issue}-${index}`} className="rounded-lg border-l-4 border-red-400 bg-red-50 p-5 shadow-sm transition-shadow hover:shadow-md">
                 <div><span className="font-semibold text-slate-900">Issue:</span> <span className="text-slate-700">{flaw.issue}</span></div>
                 <div className="mt-2 italic text-slate-600"><span className="font-semibold not-italic text-slate-900">Evidence:</span> {flaw.evidence}</div>
                 <div className="mt-2"><span className="font-semibold text-green-700">Suggested Remedy:</span> <span className="text-slate-700">{flaw.remedy}</span></div>
@@ -129,13 +150,13 @@ export function ReviewReport() {
         </div>
       </Section>
 
-      <Section title="Minor Points">
+      <Section title="Minor Points" icon={<Info className="h-4 w-4 text-amber-500" />}>
         <ul className="space-y-2 pl-5 text-slate-700">
           {data.minor_points.length === 0 ? <li>No minor points were recorded.</li> : data.minor_points.map((point, index) => <li key={`${point}-${index}`} className="list-disc">{point}</li>)}
         </ul>
       </Section>
 
-      <Section title="Related Literature">
+      <Section title="Related Literature" icon={<BookOpen className="h-4 w-4" />}>
         {data.related_papers.length === 0 ? (
           <div className="text-slate-500">No related papers found.</div>
         ) : (
