@@ -14,6 +14,12 @@ function badgeClass(recommendation: string | null) {
   return 'bg-slate-500 text-white';
 }
 
+function recommendationLabel(status: string, recommendation: string | null, overallScore: number | null) {
+  if (recommendation) return recommendation;
+  if (status === 'complete' && overallScore === null) return 'Not applicable';
+  return 'Pending';
+}
+
 function Section({
   title,
   children,
@@ -55,6 +61,9 @@ export function ReviewReport() {
     return <div className="rounded-3xl bg-white p-8 text-slate-600">Unable to load the selected review.</div>;
   }
 
+  const scoreLabel = data.overall_score === null ? 'N/A' : data.overall_score.toFixed(1);
+  const showScoreSuffix = data.overall_score !== null;
+
   return (
     <div className="space-y-6">
       <div className="sticky top-0 z-10 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm backdrop-blur">
@@ -67,7 +76,7 @@ export function ReviewReport() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className={`rounded-full px-4 py-2 text-sm font-semibold ${badgeClass(data.recommendation)}`}>
-              {data.recommendation ?? 'Pending'}
+              {recommendationLabel(data.status, data.recommendation, data.overall_score)}
             </span>
             <a
               href={api.getPdfUrl(data.id)}
@@ -85,7 +94,9 @@ export function ReviewReport() {
       <div className="grid gap-4 xl:grid-cols-[1.2fr_3fr]">
         <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-panel">
           <div className="text-sm uppercase tracking-[0.2em] text-slate-400">Overall Score</div>
-          <div className="mt-3 text-5xl font-bold">{(data.overall_score ?? 0).toFixed(1)} <span className="text-xl font-medium text-slate-300">/ 10</span></div>
+          <div className="mt-3 text-5xl font-bold">
+            {scoreLabel} {showScoreSuffix ? <span className="text-xl font-medium text-slate-300">/ 10</span> : null}
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {data.dimension_scores.map((score) => (

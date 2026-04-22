@@ -34,7 +34,6 @@ The project is built as a two-part system:
 
 ```text
 research-reviewer/
-├── .env.example
 ├── README.md
 ├── docker-compose.yml
 ├── docs/
@@ -49,14 +48,20 @@ research-reviewer/
 ```bash
 git clone <repo>
 cd research-reviewer
-cp .env.example .env
+touch .env
 ```
 
 Edit `.env` and provide real values for at least:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-SEMANTIC_SCHOLAR_API_KEY=your_s2_key_here
+SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
+GROBID_URL=http://localhost:8070
+DATABASE_URL=sqlite+aiosqlite:///./reviews.db
+OUTPUTS_DIR=outputs
+UPLOADS_DIR=uploads
+MAX_PDF_SIZE_MB=50
+ENVIRONMENT=development
 ```
 
 ### 2. Optional: Start GROBID

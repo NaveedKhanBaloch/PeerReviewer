@@ -84,6 +84,17 @@ def _parse_json_list(payload: Optional[str]) -> list:
         return []
 
 
+def _coerce_recommendation(value: Optional[str]) -> Optional[Recommendation]:
+    """Convert model recommendation text to the database enum when supported."""
+    if not value:
+        return None
+    try:
+        return Recommendation(value)
+    except ValueError:
+        logger.warning("Ignoring unsupported recommendation value: %s", value)
+        return None
+
+
 def _check_rate_limit(ip_address: str) -> None:
     """Enforce the in-memory per-IP review creation limit."""
     now = time.time()
@@ -113,7 +124,7 @@ async def _persist_review_results(session: AsyncSession, review: Review, result:
     review.abstract = result.get("abstract") or None
     review.field = result.get("field") or None
     recommendation = result.get("recommendation")
-    review.recommendation = Recommendation(recommendation) if recommendation else None
+    review.recommendation = _coerce_recommendation(recommendation)
     review.overall_score = result.get("overall_score")
     review.summary = result.get("summary") or None
     review.general_comments = result.get("general_comments") or None
@@ -181,6 +192,7 @@ async def run_pipeline(review_id: str, paper_bytes: Optional[bytes], arxiv_id: O
                 "word_count": 0,
                 "page_count": 0,
                 "field": "",
+                "research_analysis": {},
                 "related_papers": [],
                 "research_llm_raw_output": "",
                 "dimension_scores": [],

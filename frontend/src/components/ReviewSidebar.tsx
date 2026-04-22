@@ -22,7 +22,18 @@ function badgeClass(status: string, recommendation: string | null) {
   if (recommendation === 'Major revision') {
     return 'bg-orange-500 text-white';
   }
+  if (!recommendation) {
+    return 'bg-slate-500 text-white';
+  }
   return 'bg-red-500 text-white';
+}
+
+function reviewLabel(review: { status: string; recommendation: string | null; overall_score: number | null }) {
+  if (review.status === 'processing') return 'Processing';
+  if (review.status === 'failed') return 'Failed';
+  if (review.recommendation) return review.recommendation;
+  if (review.status === 'complete' && review.overall_score === null) return 'Not applicable';
+  return 'Pending';
 }
 
 export function ReviewSidebar() {
@@ -99,7 +110,7 @@ export function ReviewSidebar() {
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(review.status, review.recommendation)}`}>
                     {review.status === 'processing' ? <LoaderCircle className="h-3 w-3 animate-spin" /> : null}
-                    {review.status === 'processing' ? 'Processing' : review.status === 'failed' ? 'Failed' : review.recommendation ?? 'Pending'}
+                    {reviewLabel(review)}
                   </span>
                   <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
                     <a

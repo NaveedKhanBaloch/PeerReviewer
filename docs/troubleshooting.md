@@ -6,7 +6,7 @@ Cause:
 - `.env` missing or not populated
 
 Fix:
-- copy `.env.example` to `.env`
+- create a root `.env` file
 - set `GEMINI_API_KEY`
 
 ## `no such column: reviews.research_llm_raw_output`
@@ -66,4 +66,3 @@ Checklist:
 - backend running on `http://localhost:8000`
 - frontend running on `http://localhost:5173`
 - `VITE_API_URL` is set correctly in `frontend/.env.local`
-

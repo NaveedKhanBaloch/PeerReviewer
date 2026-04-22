@@ -26,11 +26,12 @@ class AgentState(TypedDict):
     word_count: int
     page_count: int
     field: str
+    research_analysis: Dict[str, object]
     related_papers: List[dict]
     research_llm_raw_output: str
     dimension_scores: List[dict]
-    overall_score: float
-    recommendation: str
+    overall_score: Optional[float]
+    recommendation: Optional[str]
     summary: str
     general_comments: str
     major_flaws: List[dict]

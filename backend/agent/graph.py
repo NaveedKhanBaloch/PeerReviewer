@@ -7,13 +7,22 @@ from agent.nodes.review_node import review_node
 from agent.state import AgentState
 
 
+def _route_after_research(state: AgentState) -> str:
+    """Skip review generation if extraction or novelty analysis failed."""
+    return "failed" if state.get("status") == "failed" else "review"
+
+
 def build_review_graph():
     """Build and compile the review graph."""
     graph = StateGraph(AgentState)
     graph.add_node("research_node", research_node)
     graph.add_node("review_node", review_node)
     graph.add_edge(START, "research_node")
-    graph.add_edge("research_node", "review_node")
+    graph.add_conditional_edges(
+        "research_node",
+        _route_after_research,
+        {"failed": END, "review": "review_node"},
+    )
     graph.add_edge("review_node", END)
     return graph.compile()
 

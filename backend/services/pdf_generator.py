@@ -29,6 +29,16 @@ def _score_color(score: float) -> str:
     return "#dc2626"
 
 
+def _as_score(value: object) -> Optional[float]:
+    """Return a float score when present."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def generate_review_pdf(review_data: dict, review_id: str) -> str:
     """Generate a formatted PDF report for a completed review."""
     from weasyprint import HTML
@@ -41,8 +51,8 @@ async def generate_review_pdf(review_data: dict, review_id: str) -> str:
         f"""
         <tr>
           <td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(item.get("dimension", ""))}</td>
-          <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:{_score_color(float(item.get("score", 0)))};font-weight:700;">
-            {float(item.get("score", 0)):.1f}
+          <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:{_score_color(_as_score(item.get("score")) or 0)};font-weight:700;">
+            {(_as_score(item.get("score")) or 0):.1f}
           </td>
         </tr>
         """
@@ -71,6 +81,9 @@ async def generate_review_pdf(review_data: dict, review_id: str) -> str:
         """
         for paper in review_data.get("related_papers", [])
     )
+    overall_score = _as_score(review_data.get("overall_score"))
+    overall_score_text = f"{overall_score:.1f} / 10" if overall_score is not None else "N/A"
+    recommendation_text = recommendation or ("Not applicable" if overall_score is None else "Pending")
 
     html = f"""
     <html>
@@ -83,11 +96,11 @@ async def generate_review_pdf(review_data: dict, review_id: str) -> str:
               <div style="color:#475569; margin-top:6px;">Date: {now}</div>
             </div>
             <div style="background:{badge}; color:white; padding:10px 14px; border-radius:999px; font-weight:700;">
-              {escape(recommendation or "Pending")}
+              {escape(recommendation_text)}
             </div>
           </div>
           <div style="margin-top:18px; font-size:34px; font-weight:700;">
-            {float(review_data.get("overall_score", 0)):.1f} / 10
+            {overall_score_text}
           </div>
         </header>
 

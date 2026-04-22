@@ -1,4 +1,20 @@
+# Local environment and secret files
 .env
+.env.*
+!.env.example
+frontend/.env.local
+frontend/.env.*.local
+backend/.env
+backend/.env.*
+
+# Private key / credential artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*service-account*.json
+
 .venv/
 node_modules/
 __pycache__/

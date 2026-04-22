@@ -21,9 +21,18 @@ npm run dev
 
 ## Environment Variables
 
-See:
+Create a root `.env` file for local development and set:
 
-- [`.env.example`](../.env.example)
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
+GROBID_URL=http://localhost:8070
+DATABASE_URL=sqlite+aiosqlite:///./reviews.db
+OUTPUTS_DIR=outputs
+UPLOADS_DIR=uploads
+MAX_PDF_SIZE_MB=50
+ENVIRONMENT=development
+```
 
 ## Optional Services
 
@@ -64,4 +73,3 @@ pytest tests/ -v --timeout=180
 cd frontend
 npm run build
 ```
-

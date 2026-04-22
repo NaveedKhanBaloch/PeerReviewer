@@ -8,6 +8,7 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from agent.errors import format_model_error, is_expected_model_auth_error
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
@@ -75,6 +76,7 @@ async def research_node(state: AgentState) -> dict:
             model=settings.GEMINI_FLASH_MODEL,
             temperature=0.1,
             google_api_key=settings.GEMINI_API_KEY,
+            response_mime_type="application/json",
         )
         user_prompt = f"""Paper abstract:
 {paper["abstract"]}
@@ -93,14 +95,28 @@ Analyse the novelty and field of this paper."""
         raw_output = str(response.content).strip()
         updates["research_llm_raw_output"] = raw_output
         novelty_data = json.loads(_strip_json_fences(raw_output))
+        updates["research_analysis"] = novelty_data
         updates["field"] = novelty_data.get("field", "General Science")
+        if novelty_data.get("document_type_valid") is False:
+            detected_type = novelty_data.get("document_type_detected") or "non-research document"
+            updates["field"] = "N/A"
+            updates["related_papers"] = []
+            updates["progress_messages"].append(
+                f"Document type detected: {detected_type}. Full peer review is not applicable."
+            )
+            return updates
         updates["progress_messages"].append(
             f"Field detected: {updates['field']}. Novelty score: {novelty_data.get('novelty_score', 'N/A')}"
         )
     except Exception as exc:
-        logger.error("research_node error: %s", exc, exc_info=True)
+        user_message = format_model_error(exc)
+        logger.error(
+            "research_node error: %s",
+            user_message,
+            exc_info=not is_expected_model_auth_error(exc),
+        )
         updates.setdefault("research_llm_raw_output", "")
-        updates["error"] = f"Research node failed: {exc}"
+        updates["error"] = f"Research node failed: {user_message}"
         updates["status"] = "failed"
 
     return updates
