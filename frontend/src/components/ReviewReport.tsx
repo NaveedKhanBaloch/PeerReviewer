@@ -65,9 +65,16 @@ export function ReviewReport() {
 
   const scoreLabel = data.overall_score === null ? 'N/A' : data.overall_score.toFixed(1);
   const showScoreSuffix = data.overall_score !== null;
+  const publishedMatch = data.related_papers.find((paper) => paper.relevance_note?.toLowerCase().includes('already published match'));
   const alreadyPublished = data.major_flaws.some((flaw) => flaw.issue.toLowerCase().includes('already-published'))
     || data.summary?.toLowerCase().includes('already published paper')
-    || data.related_papers.some((paper) => paper.relevance_note?.toLowerCase().includes('already published match'));
+    || Boolean(publishedMatch);
+  const publishedIn = publishedMatch?.relevance_note?.match(/Published in ([^.]+)\./)?.[1];
+  const publicationDetails = publishedIn
+    ? `Published in ${publishedIn}.`
+    : publishedMatch?.year
+      ? `Published in ${publishedMatch.year}.`
+      : 'A matching published record was found.';
 
   return (
     <div className="space-y-6">
@@ -102,9 +109,7 @@ export function ReviewReport() {
             <AlertTriangle className="mt-1 h-5 w-5 flex-none text-red-600" />
             <div>
               <h2 className="text-lg font-semibold">This paper is already published</h2>
-              <p className="mt-2 leading-7">
-                A matching published record was found in Semantic Scholar. The system stopped the review process and did not run the full Gemini peer-review stage.
-              </p>
+              <p className="mt-2 leading-7">{publicationDetails}</p>
             </div>
           </div>
         </div>
@@ -141,7 +146,15 @@ export function ReviewReport() {
           ) : (
             data.major_flaws.map((flaw, index) => (
               <div key={`${flaw.issue}-${index}`} className="rounded-lg border-l-4 border-red-400 bg-red-50 p-5 shadow-sm transition-shadow hover:shadow-md">
-                <div><span className="font-semibold text-slate-900">Issue:</span> <span className="text-slate-700">{flaw.issue}</span></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-900">Issue:</span>
+                  <span className="text-slate-700">{flaw.issue}</span>
+                  {flaw.severity ? (
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-red-700">
+                      {flaw.severity}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-2 italic text-slate-600"><span className="font-semibold not-italic text-slate-900">Evidence:</span> {flaw.evidence}</div>
                 <div className="mt-2"><span className="font-semibold text-green-700">Suggested Remedy:</span> <span className="text-slate-700">{flaw.remedy}</span></div>
               </div>

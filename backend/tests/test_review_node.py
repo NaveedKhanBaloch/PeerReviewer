@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from agent.graph import _route_after_research
-from agent.nodes.research_node import _duplicate_publication_result
+from agent.nodes.research_node import _duplicate_publication_result, _title_candidates
 from agent.nodes.review_node import _apply_publication_duplicate_guardrail, _load_json_output, _normalize_review_data, review_node
-from services.lit_search import detect_publication_duplicate
+from services.lit_search import detect_publication_duplicate, titles_match_exact
 
 
 def _base_state() -> dict:
@@ -101,12 +101,12 @@ def test_load_json_output_rejects_malformed_json():
 
 
 def test_detect_publication_duplicate_marks_exact_related_title():
-    """Exact Semantic Scholar title matches should be treated as already published."""
+    """Exact Semantic Scholar title matches should stop review even without author overlap."""
     title = "Application Mapping Using Cuckoo Search Optimization With Lévy Flight for NoC-Based System"
     related = [
         {
             "title": "Application Mapping Using Cuckoo Search Optimization With Levy Flight for NoC-Based System",
-            "authors": "Naveed Khan, Jane Doe",
+            "authors": "Different Author, Someone Else",
             "year": 2021,
             "venue": "IEEE Access",
             "citation_count": 19,
@@ -120,6 +120,43 @@ def test_detect_publication_duplicate_marks_exact_related_title():
     assert result["duplicate_confidence"] == "high"
     assert related[0]["duplicate_publication_match"] is True
     assert "Already published match" in related[0]["relevance_note"]
+    assert "IEEE Access, 2021" in related[0]["relevance_note"]
+    assert result["author_overlap"] == 0.0
+
+
+def test_detect_publication_duplicate_does_not_stop_on_near_match():
+    """Only exact normalized title matches should stop the review."""
+    title = "Application Mapping Using Cuckoo Search Optimization With Levy Flight for NoC-Based System"
+    related = [
+        {
+            "title": "Application Mapping Using Cuckoo Search Optimization for NoC-Based System",
+            "authors": "Different Author",
+            "year": 2021,
+            "venue": "IEEE Access",
+            "citation_count": 19,
+        }
+    ]
+
+    result = detect_publication_duplicate(title, [], related)
+
+    assert result["status"] == "not_found"
+    assert titles_match_exact(title, related[0]["title"]) is False
+
+
+def test_title_candidates_recover_title_when_pdf_header_is_noisy():
+    """First-page title lines should be searched when extracted title is wrong."""
+    full_text = """
+Algorithms
+Article
+IWO-IGA - A Hybrid Whale Optimization Algorithm Featuring Improved Genetic Characteristics
+for Mapping Real-Time Applications onto 2D Network on Chip
+Abstract
+This paper proposes a hybrid algorithm.
+"""
+
+    candidates = _title_candidates("Algorithms", full_text)
+
+    assert any("IWO-IGA" in candidate for candidate in candidates)
 
 
 def test_publication_duplicate_guardrail_forces_reject_and_low_originality():
@@ -211,5 +248,6 @@ def test_duplicate_publication_result_is_terminal_without_review_model():
     assert result["overall_score"] is None
     assert result["dimension_scores"] == []
     assert result["review_llm_raw_output"] == ""
+    assert '"extracted_title": "IWO-IGA - A Hybrid Whale Optimization Algorithm"' in result["research_llm_raw_output"]
     assert "Skipped Gemini" in result["research_llm_raw_output"]
     assert _route_after_research({"status": "complete"}) == "end"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -12,10 +13,156 @@ from agent.errors import format_model_error, is_expected_model_auth_error
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
-from services.lit_search import detect_publication_duplicate, search_related_papers
+from services.lit_search import search_related_papers
 from services.pdf_extractor import extract_paper
 
 logger = logging.getLogger(__name__)
+
+TITLE_EXTRACTION_SYSTEM_PROMPT = """You extract the exact paper title from the first page of an academic PDF.
+Return ONLY valid JSON with this schema:
+{"title":"string"}
+Rules:
+- Use only the first page text provided.
+- Return the full manuscript title, not a journal name, header, section label, or author list.
+- Prefer the best complete title if the text is noisy or line-broken.
+- If you are uncertain, return the strongest full title candidate rather than a fragment."""
+
+TITLE_MATCH_SYSTEM_PROMPT = """You compare one extracted manuscript title against a list of Semantic Scholar titles.
+Return ONLY valid JSON with this schema:
+{
+  "matched": true,
+  "matched_title": "string or null",
+  "reason": "string"
+}
+Rules:
+- Decide whether any listed title is the same paper as the extracted title.
+- Treat punctuation, dash variants, line-break artifacts, and harmless unicode differences as the same title.
+- Do NOT match merely related or similar papers.
+- Only return matched=true when the titles refer to the same paper.
+- If no exact/same-paper match exists, return matched=false and matched_title=null."""
+
+
+def _title_candidates(extracted_title: str, full_text: str) -> list[str]:
+    """Build a few likely title candidates when PDF extraction picks up header noise."""
+    candidates = []
+    if extracted_title:
+        candidates.append(extracted_title)
+
+    lines = [re.sub(r"\s+", " ", line).strip() for line in full_text.splitlines()[:80]]
+    lines = [line for line in lines if line]
+    blocked = ("abstract", "introduction", "keywords", "doi", "journal", "copyright", "received", "accepted")
+    for index, line in enumerate(lines):
+        lower = line.lower()
+        word_count = len(line.split())
+        if word_count < 4 or word_count > 24:
+            continue
+        if any(token in lower for token in blocked):
+            continue
+        if not re.search(r"[A-Za-z]{4}", line):
+            continue
+        candidates.append(line)
+        if index + 1 < len(lines):
+            combined = f"{line} {lines[index + 1]}"
+            combined_words = len(combined.split())
+            if 6 <= combined_words <= 28 and not any(token in combined.lower() for token in blocked):
+                candidates.append(combined)
+        if len(candidates) >= 6:
+            break
+
+    deduped = []
+    seen = set()
+    for candidate in candidates:
+        key = re.sub(r"[^a-z0-9]+", " ", candidate.lower()).strip()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(candidate)
+    return deduped[:5]
+
+
+async def _extract_title_with_gemini(first_page_text: str, heuristic_title: str) -> str:
+    """Use Gemini Flash to extract the title from first-page text."""
+    if not first_page_text.strip():
+        return heuristic_title
+
+    llm = ChatGoogleGenerativeAI(
+        model=settings.GEMINI_FLASH_MODEL,
+        temperature=0,
+        google_api_key=settings.GEMINI_API_KEY,
+        response_mime_type="application/json",
+    )
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=TITLE_EXTRACTION_SYSTEM_PROMPT),
+            HumanMessage(
+                content=(
+                    f"Heuristic title candidate:\n{heuristic_title}\n\n"
+                    f"First page text:\n{first_page_text[:12000]}"
+                )
+            ),
+        ]
+    )
+    payload = json.loads(_strip_json_fences(str(response.content).strip()))
+    title = str(payload.get("title") or "").strip()
+    return title or heuristic_title
+
+
+async def _match_title_against_related_with_gemini(extracted_title: str, related_papers: list[dict]) -> dict:
+    """Use Gemini Flash to decide whether any Semantic Scholar title matches the extracted title."""
+    if not extracted_title.strip() or not related_papers:
+        return {"matched": False, "matched_title": None, "reason": "No titles available to compare."}
+
+    llm = ChatGoogleGenerativeAI(
+        model=settings.GEMINI_FLASH_MODEL,
+        temperature=0,
+        google_api_key=settings.GEMINI_API_KEY,
+        response_mime_type="application/json",
+    )
+    related_titles = [
+        {
+            "title": str(paper.get("title") or ""),
+            "year": paper.get("year"),
+            "venue": paper.get("venue") or paper.get("publication_venue"),
+        }
+        for paper in related_papers
+        if paper.get("title")
+    ]
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=TITLE_MATCH_SYSTEM_PROMPT),
+            HumanMessage(
+                content=(
+                    f"Extracted manuscript title:\n{extracted_title}\n\n"
+                    f"Semantic Scholar titles:\n{json.dumps(related_titles, ensure_ascii=False, indent=2)}"
+                )
+            ),
+        ]
+    )
+    payload = json.loads(_strip_json_fences(str(response.content).strip()))
+    return {
+        "matched": bool(payload.get("matched")),
+        "matched_title": payload.get("matched_title"),
+        "reason": str(payload.get("reason") or "").strip(),
+    }
+
+
+def _merge_related_papers(existing: list[dict], incoming: list[dict]) -> list[dict]:
+    """Merge Semantic Scholar results without dropping duplicate-publication annotations."""
+    merged: dict[str, dict] = {}
+    for paper in [*existing, *incoming]:
+        key = str(paper.get("s2_paper_id") or paper.get("title") or "")
+        if not key:
+            continue
+        current = merged.get(key, {})
+        merged[key] = {**current, **paper}
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            item.get("duplicate_publication_match") is True,
+            item.get("citation_count") or 0,
+        ),
+        reverse=True,
+    )
+
 
 def _strip_json_fences(raw_text: str) -> str:
     """Remove markdown fences from model output when present."""
@@ -71,12 +218,16 @@ def _duplicate_publication_result(state: dict, publication_check: dict, related:
                     "This flaw is non-remediable for a new-manuscript submission. "
                     "Withdraw or reject the submission and follow duplicate-publication ethics guidance."
                 ),
+                "severity": "critical",
             }
         ],
         "minor_points": [],
         "related_papers": related,
         "research_llm_raw_output": json.dumps(
             {
+                "heuristic_title": state.get("heuristic_title"),
+                "extracted_title": state.get("title"),
+                "title_candidates_checked": state.get("title_candidates_checked", []),
                 "publication_check": publication_check,
                 "action": "Skipped Gemini novelty and peer-review calls because the manuscript appears already published.",
             }
@@ -101,9 +252,11 @@ async def research_node(state: AgentState) -> dict:
         updates.update(
             {
                 "title": paper["title"],
+                "heuristic_title": paper["title"],
                 "authors": paper["authors"],
                 "abstract": paper["abstract"],
                 "full_text": paper["full_text"],
+                "first_page_text": paper.get("first_page_text", ""),
                 "sections": paper["sections"],
                 "figures": paper["figures"],
                 "tables": paper["tables"],
@@ -112,26 +265,82 @@ async def research_node(state: AgentState) -> dict:
                 "page_count": paper["page_count"],
             }
         )
-        updates["progress_messages"].append(
-            f"Paper extracted: {paper['title'][:60]}... ({paper['page_count']} pages)"
+        gemini_title = await _extract_title_with_gemini(
+            str(paper.get("first_page_text") or ""),
+            str(paper["title"]),
         )
+        updates["title"] = gemini_title
+        updates["progress_messages"].append(
+            f"Paper extracted: {gemini_title[:60]}... ({paper['page_count']} pages)"
+        )
+        logger.info("Extracted title from PDF with Gemini: %s", gemini_title)
 
         updates["progress_messages"].append("Searching related literature...")
         related = await search_related_papers(
-            title=paper["title"],
+            title=gemini_title,
             abstract=paper["abstract"],
             api_key=settings.SEMANTIC_SCHOLAR_API_KEY,
         )
+        updates["title_candidates_checked"] = [gemini_title]
+
+        logger.info("Extracted title:\n%s\n", gemini_title)
+        related_titles = [str(item.get("title") or "") for item in related if item.get("title")]
+        logger.info("Semantic Scholar related paper titles:\n%s\n", "\n".join(related_titles) if related_titles else "(none)")
+        title_match = await _match_title_against_related_with_gemini(gemini_title, related)
+        logger.info(
+            "Gemini title-match verdict:\nmatched=%s\nmatched_title=%s\nreason=%s\n",
+            title_match.get("matched"),
+            title_match.get("matched_title"),
+            title_match.get("reason"),
+        )
+
+        publication_check = {"status": "not_found", "duplicate_confidence": "none", "matches": []}
+        if title_match.get("matched"):
+            matched_title = str(title_match.get("matched_title") or gemini_title)
+            matched_paper = next((paper for paper in related if str(paper.get("title") or "") == matched_title), None)
+            if matched_paper is None and related:
+                matched_paper = next((paper for paper in related if paper.get("title")), related[0])
+            if matched_paper is not None:
+                venue = matched_paper.get("venue") or matched_paper.get("publication_venue")
+                year = matched_paper.get("year")
+                external_ids = matched_paper.get("external_ids") or {}
+                published_in = ", ".join(
+                    str(value) for value in [venue, year] if value not in (None, "", "N/A")
+                ) or "Semantic Scholar"
+                doi = external_ids.get("DOI") if isinstance(external_ids, dict) else None
+                doi_note = f" DOI: {doi}." if doi else ""
+                matched_paper["duplicate_publication_match"] = True
+                matched_paper["relevance_note"] = (
+                    f"Already published match: Published in {published_in}.{doi_note} {title_match.get('reason')}".strip()
+                )
+                publication_check = {
+                    "status": "already_published",
+                    "duplicate_confidence": "high",
+                    "matched_title": matched_paper.get("title"),
+                    "matched_year": year,
+                    "matched_venue": venue,
+                    "matched_s2_paper_id": matched_paper.get("s2_paper_id"),
+                    "matched_external_ids": external_ids,
+                    "reason": title_match.get("reason") or "Gemini confirmed the extracted title matches a Semantic Scholar record.",
+                    "source_title_checked": gemini_title,
+                    "matches": [
+                        {
+                            "title": matched_paper.get("title"),
+                            "year": year,
+                            "venue": venue,
+                            "s2_paper_id": matched_paper.get("s2_paper_id"),
+                            "external_ids": external_ids,
+                            "confidence": "high",
+                            "reason": title_match.get("reason") or "Gemini confirmed a title match.",
+                        }
+                    ],
+                }
+
         updates["related_papers"] = related
         updates["progress_messages"].append(
             f"Found {len(related)} related papers on Semantic Scholar"
         )
 
-        publication_check = detect_publication_duplicate(
-            title=paper["title"],
-            authors=paper["authors"],
-            related_papers=related,
-        )
         updates["publication_check"] = publication_check
         if publication_check.get("status") == "already_published":
             updates["progress_messages"].append(
@@ -165,7 +374,14 @@ Analyse the novelty and field of this paper."""
             ]
         )
         raw_output = str(response.content).strip()
-        updates["research_llm_raw_output"] = raw_output
+        updates["research_llm_raw_output"] = json.dumps(
+            {
+                "heuristic_title": paper["title"],
+                "extracted_title": gemini_title,
+                "title_candidates_checked": [gemini_title],
+                "gemini_output": raw_output,
+            }
+        )
         novelty_data = json.loads(_strip_json_fences(raw_output))
         updates["research_analysis"] = novelty_data
         if publication_check.get("status") == "already_published":

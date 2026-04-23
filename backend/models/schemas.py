@@ -183,6 +183,7 @@ class MajorFlaw(BaseModel):
     issue: str
     evidence: str
     remedy: str
+    severity: Optional[str] = None
 
 
 class ReviewListItem(BaseModel):

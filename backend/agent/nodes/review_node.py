@@ -171,6 +171,7 @@ def _apply_publication_duplicate_guardrail(review_data: dict, state: AgentState)
             "Do not submit an already published paper as a new manuscript. If this is intended as a "
             "post-publication assessment, label it explicitly and remove publication-decision scoring."
         ),
+        "severity": "critical",
     }
     flaws = [item for item in _as_list(review_data.get("major_flaws")) if isinstance(item, dict)]
     if not any("published" in _as_text(item.get("issue")).lower() or "duplicate" in _as_text(item.get("issue")).lower() for item in flaws):
@@ -372,6 +373,7 @@ async def review_node(state: AgentState) -> dict:
                         f"'{publication_check.get('matched_title', state.get('title', 'submitted manuscript'))}'."
                     ),
                     "remedy": "Do not submit an already published paper as a new manuscript.",
+                    "severity": "critical",
                 },
             )
         normalized_review_data["major_flaws"] = validated_flaws

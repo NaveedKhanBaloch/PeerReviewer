@@ -90,6 +90,7 @@ export interface MajorFlaw {
   issue: string;
   evidence: string;
   remedy: string;
+  severity?: string | null;
 }
 
 export interface FullReview {

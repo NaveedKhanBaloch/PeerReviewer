@@ -193,6 +193,7 @@ async def extract_paper(
     doc = fitz.open(stream=resolved_pdf_bytes, filetype="pdf")
     page_texts = [page.get_text("text") for page in doc]
     full_text = "\n".join(page_texts)
+    first_page_text = page_texts[0] if page_texts else ""
     title = str(arxiv_metadata.get("title") or _extract_title_from_first_page(doc) or "Untitled Paper")
     authors = list(arxiv_metadata.get("authors", []))
     abstract = str(arxiv_metadata.get("abstract") or _extract_abstract(full_text))
@@ -216,6 +217,7 @@ async def extract_paper(
 
     return {
         "title": title,
+        "first_page_text": first_page_text,
         "authors": authors,
         "abstract": abstract,
         "full_text": full_text,
