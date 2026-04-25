@@ -4,6 +4,7 @@ import { FileText, Shield, TrendingUp, UserCheck, Users, type LucideIcon } from 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
+import { toErrorMessage } from '../api/errorMessage';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ErrorCard } from '../components/ErrorCard';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -38,12 +39,16 @@ export function AdminPage() {
     : [];
 
   const createUser = async () => {
-    await api.admin.createUser(newUser);
-    toast.success('User created. Share credentials securely.');
-    setCreating(false);
-    setNewUser({ email: '', username: '', password: '', role: 'user', full_name: '', organisation: '' });
-    await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-    await queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    try {
+      const createdUser = await api.admin.createUser(newUser);
+      toast.success(`User created: ${createdUser.username}`);
+      setCreating(false);
+      setNewUser({ email: '', username: '', password: '', role: 'user', full_name: '', organisation: '' });
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    } catch (error: any) {
+      toast.error(toErrorMessage(error?.response?.data?.detail, 'Could not create user.'));
+    }
   };
 
   return (

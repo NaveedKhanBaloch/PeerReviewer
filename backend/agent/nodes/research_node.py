@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent.errors import format_model_error, is_expected_model_auth_error
+from agent.progress import emit_progress
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
@@ -243,6 +244,7 @@ async def research_node(state: AgentState) -> dict:
 
     try:
         updates["progress_messages"].append("Extracting paper content...")
+        await emit_progress(state["review_id"], "extracting", "Extracting paper content")
         paper = await extract_paper(
             pdf_bytes=state.get("paper_bytes"),
             arxiv_id=state.get("arxiv_id"),
@@ -276,6 +278,7 @@ async def research_node(state: AgentState) -> dict:
         logger.info("Extracted title from PDF with Gemini: %s", gemini_title)
 
         updates["progress_messages"].append("Searching related literature...")
+        await emit_progress(state["review_id"], "literature", "Searching related literature")
         related = await search_related_papers(
             title=gemini_title,
             abstract=paper["abstract"],
@@ -350,6 +353,7 @@ async def research_node(state: AgentState) -> dict:
             return updates
 
         updates["progress_messages"].append("Analysing research field and novelty...")
+        await emit_progress(state["review_id"], "analysing", "Analysing research field and novelty")
         llm = ChatGoogleGenerativeAI(
             model=settings.GEMINI_FLASH_MODEL,
             temperature=0.1,

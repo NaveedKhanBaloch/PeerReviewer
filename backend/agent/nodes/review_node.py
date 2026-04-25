@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent.errors import format_model_error, is_expected_model_auth_error
+from agent.progress import emit_progress
 from agent.prompts import REVIEW_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
@@ -316,6 +317,7 @@ async def review_node(state: AgentState) -> dict:
         updates["progress_messages"].append(
             "Running peer review analysis with Gemini Pro (this takes 30-60 seconds)..."
         )
+        await emit_progress(state["review_id"], "reviewing", "Running peer review analysis")
         llm = ChatGoogleGenerativeAI(
             model=settings.GEMINI_PRO_MODEL,
             temperature=0.2,

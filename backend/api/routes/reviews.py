@@ -56,6 +56,20 @@ STEP_MAPPING = [
 ]
 
 
+def _is_admin(user: Optional[User]) -> bool:
+    """Return whether the current user has admin access."""
+    return bool(user and getattr(user.role, "value", user.role) == "admin")
+
+
+def _can_access_review(review: Review, current_user: Optional[User]) -> bool:
+    """Return whether the current user may access the review."""
+    if _is_admin(current_user):
+        return True
+    if review.created_by_user_id is None:
+        return current_user is None
+    return bool(current_user and review.created_by_user_id == current_user.id)
+
+
 def _utcnow() -> datetime:
     """Return a timezone-aware UTC timestamp."""
     return datetime.now(timezone.utc)
@@ -375,8 +389,13 @@ async def list_reviews(
 ) -> List[ReviewListItem]:
     """Return recent non-deleted reviews for the sidebar."""
     filters = [Review.deleted_at.is_(None)]
-    if mine and current_user is not None:
+    if _is_admin(current_user):
+        if mine:
+            filters.append(Review.created_by_user_id == current_user.id)
+    elif current_user is not None:
         filters.append(Review.created_by_user_id == current_user.id)
+    else:
+        filters.append(Review.created_by_user_id.is_(None))
     result = await db.execute(
         select(Review)
         .where(*filters)
@@ -399,11 +418,17 @@ async def list_reviews(
 
 
 @router.get("/review/{review_id}", response_model=FullReviewOut)
-async def get_review(review_id: str, db: AsyncSession = Depends(get_db)) -> FullReviewOut:
+async def get_review(
+    review_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+) -> FullReviewOut:
     """Return a full review payload by id."""
     review = await db.get(Review, review_id)
     if review is None or review.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Review not found.")
+    if not _can_access_review(review, current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this review.")
 
     result = await db.execute(
         select(ReviewDimensionScore).where(ReviewDimensionScore.review_id == review_id).order_by(ReviewDimensionScore.dimension.asc())
@@ -455,11 +480,17 @@ async def get_review(review_id: str, db: AsyncSession = Depends(get_db)) -> Full
 
 
 @router.get("/review/{review_id}/pdf")
-async def download_pdf(review_id: str, db: AsyncSession = Depends(get_db)) -> FileResponse:
+async def download_pdf(
+    review_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
     """Download the generated review PDF."""
     review = await db.get(Review, review_id)
     if review is None or review.deleted_at is not None or not review.pdf_report_path:
         raise HTTPException(status_code=404, detail="PDF not found.")
+    if not _can_access_review(review, current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this review.")
 
     path = Path(review.pdf_report_path)
     if not path.exists():
@@ -475,11 +506,17 @@ async def download_pdf(review_id: str, db: AsyncSession = Depends(get_db)) -> Fi
 
 
 @router.delete("/review/{review_id}")
-async def delete_review(review_id: str, db: AsyncSession = Depends(get_db)) -> JSONResponse:
+async def delete_review(
+    review_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
     """Soft-delete a review."""
     review = await db.get(Review, review_id)
     if review is None or review.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Review not found.")
+    if not _can_access_review(review, current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this review.")
     review.deleted_at = _utcnow()
     await db.commit()
     return JSONResponse({"message": "deleted"})

@@ -7,7 +7,6 @@ import { useReviewStore } from '../stores/reviewStore';
 export function UploadZone() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [arxivUrl, setArxivUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { addReview, pushToast, startProcessing } = useReviewStore();
@@ -52,32 +51,11 @@ export function UploadZone() {
     }
   };
 
-  const startArxivReview = async () => {
-    if (!arxivUrl.trim()) {
-      setError('Please paste an arXiv URL.');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await api.startReviewWithArxiv(arxivUrl.trim());
-      beginProcessing(res.review_id);
-      setArxivUrl('');
-    } catch (_err) {
-      const message = 'Failed to start review for that arXiv URL.';
-      setError(message);
-      pushToast(message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-[36px] border border-slate-100 bg-white/90 p-8 shadow-xl backdrop-blur">
       <div className="text-center">
         <h1 className="text-4xl font-bold tracking-tight text-slate-900">AI Research Reviewer</h1>
-        <p className="mt-3 text-slate-500">Upload a manuscript or paste an arXiv URL to generate a structured peer review with live progress updates.</p>
+        <p className="mt-3 text-slate-500">Upload a manuscript to generate a structured peer review with live progress updates.</p>
       </div>
 
       <button
@@ -123,24 +101,12 @@ export function UploadZone() {
         }}
       />
 
-      <div className="flex items-center gap-4">
-        <div className="h-px flex-1 bg-slate-200" />
-        <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">OR</div>
-        <div className="h-px flex-1 bg-slate-200" />
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          value={arxivUrl}
-          onChange={(event) => setArxivUrl(event.target.value)}
-          placeholder="Paste arXiv URL (e.g. https://arxiv.org/abs/2503.08569)"
-          className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="flex justify-center">
         <button
           type="button"
           disabled={submitting}
-          onClick={() => void startArxivReview()}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
           Review

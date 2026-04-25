@@ -7,7 +7,7 @@ import { toErrorMessage } from '../api/errorMessage';
 import { useAuthStore } from '../stores/authStore';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,8 @@ export function LoginPage() {
   if (accessToken && user) return <Navigate to="/app" replace />;
 
   const submit = async () => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Enter a valid email address.');
+    if (!identifier.trim()) {
+      setError('Enter your email or username.');
       return;
     }
     if (!password) {
@@ -31,7 +31,7 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.auth.login(email, password);
+      const response = await api.auth.login(identifier.trim(), password);
       login(response);
       navigate(redirect, { replace: true });
     } catch (err: any) {
@@ -69,10 +69,10 @@ export function LoginPage() {
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
           <h2 className="text-2xl font-bold text-slate-800">Welcome back</h2>
           <p className="mb-6 mt-1 text-sm text-slate-500">Sign in to your account</p>
-          <label className="text-sm font-medium text-slate-700">Email</label>
+          <label className="text-sm font-medium text-slate-700">Email or username</label>
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 focus-within:ring-2 focus-within:ring-blue-500">
             <Mail className="h-4 w-4 text-slate-400" />
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="your@email.com" className="w-full outline-none" />
+            <input value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="your@email.com or username" className="w-full outline-none" />
           </div>
           <label className="mt-4 block text-sm font-medium text-slate-700">Password</label>
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 focus-within:ring-2 focus-within:ring-blue-500">

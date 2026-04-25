@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronDown, Download, LoaderCircle, Plus, Search, Shield, Trash2, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BookOpen, ChevronDown, Download, LoaderCircle, Plus, Shield, Trash2, User } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -40,10 +40,9 @@ function reviewLabel(review: { status: string; recommendation: string | null; ov
 }
 
 export function ReviewSidebar() {
-  const [query, setQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [mineOnly, setMineOnly] = useState(false);
   const { isAdmin, isAuthenticated, logout, user } = useAuthStore();
+  const [mineOnly, setMineOnly] = useState(!isAdmin());
   const { isProcessing, pushToast, removeReview, reviews, selectedReviewId, setReviews, setSelectedReview } = useReviewStore();
   const navigate = useNavigate();
 
@@ -65,10 +64,11 @@ export function ReviewSidebar() {
     }
   }, [reviewsQuery.error, pushToast]);
 
-  const filtered = useMemo(() => {
-    const lowered = query.toLowerCase();
-    return reviews.filter((review) => review.title.toLowerCase().includes(lowered));
-  }, [query, reviews]);
+  useEffect(() => {
+    if (!isAdmin()) {
+      setMineOnly(true);
+    }
+  }, [isAdmin]);
 
   return (
     <aside className="flex h-screen w-[280px] flex-col bg-slate-900 text-white">
@@ -104,25 +104,16 @@ export function ReviewSidebar() {
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
-          <Search className="h-4 w-4 text-slate-400" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search reviews"
-            className="w-full border-0 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-          />
-        </div>
       </div>
 
       <div className="relative flex-1 overflow-y-auto p-3 after:sticky after:bottom-0 after:block after:h-8 after:bg-gradient-to-t after:from-slate-900 after:content-['']">
-        {filtered.length === 0 ? (
+        {reviews.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
             No reviews yet. Upload a paper to get started.
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((review) => (
+            {reviews.map((review) => (
               <button
                 key={review.id}
                 type="button"
@@ -176,7 +167,11 @@ export function ReviewSidebar() {
       </div>
       <div className="border-t border-slate-700 p-3 text-xs">
         {isAdmin() ? <button type="button" onClick={() => navigate('/admin')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"><Shield className="h-4 w-4" /> Admin Panel</button> : null}
-        <button type="button" onClick={() => setMineOnly((value) => !value)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-800 ${mineOnly ? 'text-blue-300' : 'text-slate-300'}`}><BookOpen className="h-4 w-4" /> My Reviews</button>
+        {isAdmin() ? (
+          <button type="button" onClick={() => setMineOnly((value) => !value)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-800 ${mineOnly ? 'text-blue-300' : 'text-slate-300'}`}><BookOpen className="h-4 w-4" /> {mineOnly ? 'My Reviews' : 'All Reviews'}</button>
+        ) : (
+          <div className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-blue-300"><BookOpen className="h-4 w-4" /> My Reviews</div>
+        )}
         {isAuthenticated ? <button type="button" onClick={() => navigate('/profile')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"><User className="h-4 w-4" /> My Profile</button> : null}
       </div>
     </aside>

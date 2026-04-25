@@ -1,5 +1,6 @@
 export function formatDistanceToNow(value: string): string {
-  const date = new Date(value);
+  const normalized = /[zZ]|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`;
+  const date = new Date(normalized);
   const diffMs = Date.now() - date.getTime();
   const minutes = Math.floor(diffMs / 60000);
   if (minutes < 1) return 'just now';

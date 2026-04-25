@@ -85,8 +85,8 @@ export const api = {
   getPdfUrl: (id: string): string => `${API_URL}/api/review/${id}/pdf`,
 
   auth: {
-    login: async (email: string, password: string): Promise<TokenResponse> => {
-      const res = await apiClient.post('/api/auth/login', { email, password });
+    login: async (identifier: string, password: string): Promise<TokenResponse> => {
+      const res = await apiClient.post('/api/auth/login', { identifier, password });
       return res.data;
     },
     refresh: async (refreshToken: string): Promise<TokenResponse> => {

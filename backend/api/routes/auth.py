@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user
@@ -34,7 +34,14 @@ def _token_response(user: User) -> TokenResponse:
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     """Login with email and password."""
-    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    identifier = payload.identifier.strip()
+    lowered_identifier = identifier.lower()
+    result = await db.execute(
+        select(User).where(
+            (func.lower(User.email) == lowered_identifier)
+            | (func.lower(User.username) == lowered_identifier)
+        )
+    )
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")

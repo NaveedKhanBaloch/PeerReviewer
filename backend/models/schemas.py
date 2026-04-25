@@ -6,7 +6,7 @@ from datetime import datetime
 import re
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 def _validate_password(value: str) -> str:
@@ -107,7 +107,7 @@ class TokenResponse(BaseModel):
 class LoginRequest(BaseModel):
     """Email/password login request."""
 
-    email: EmailStr
+    identifier: str = Field(validation_alias=AliasChoices("identifier", "email"))
     password: str
 
 
