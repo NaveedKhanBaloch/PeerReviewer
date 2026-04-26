@@ -112,6 +112,17 @@ def _parse_json_list(payload: Optional[str]) -> list:
         return []
 
 
+def _parse_json_object(payload: Optional[str]) -> dict:
+    """Parse a JSON object string safely."""
+    if not payload:
+        return {}
+    try:
+        data = json.loads(payload)
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
 def _coerce_recommendation(value: Optional[str]) -> Optional[Recommendation]:
     """Convert model recommendation text to the database enum when supported."""
     if not value:
@@ -438,6 +449,7 @@ async def get_review(
         select(RelatedPaper).where(RelatedPaper.review_id == review_id).order_by(RelatedPaper.citation_count.desc())
     )
     related_papers = related_result.scalars().all()
+    research_raw = _parse_json_object(review.research_llm_raw_output)
 
     return FullReviewOut(
         id=review.id,
@@ -474,6 +486,7 @@ async def get_review(
             for item in related_papers
         ],
         research_llm_raw_output=review.research_llm_raw_output,
+        openreview_examples_prompt=research_raw.get("openreview_examples_prompt"),
         review_llm_raw_output=review.review_llm_raw_output,
         created_at=review.created_at,
     )

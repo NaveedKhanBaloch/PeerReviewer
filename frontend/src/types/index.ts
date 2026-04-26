@@ -109,6 +109,7 @@ export interface FullReview {
   dimension_scores: DimensionScore[];
   related_papers: RelatedPaper[];
   research_llm_raw_output?: string | null;
+  openreview_examples_prompt?: string | null;
   review_llm_raw_output?: string | null;
   created_at: string;
 }

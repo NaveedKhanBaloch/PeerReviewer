@@ -83,6 +83,21 @@ export const api = {
   },
 
   getPdfUrl: (id: string): string => `${API_URL}/api/review/${id}/pdf`,
+  downloadPdf: async (id: string): Promise<void> => {
+    const response = await apiClient.get(`/api/review/${id}/pdf`, {
+      responseType: 'blob',
+    });
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    const disposition = response.headers['content-disposition'] as string | undefined;
+    const filenameMatch = disposition?.match(/filename="?([^"]+)"?/i);
+    link.href = blobUrl;
+    link.download = filenameMatch?.[1] || `review-${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  },
 
   auth: {
     login: async (identifier: string, password: string): Promise<TokenResponse> => {

@@ -90,15 +90,20 @@ export function ReviewReport() {
             <span className={`rounded-full px-4 py-1.5 text-sm font-semibold tracking-wide ${badgeClass(data.recommendation)}`}>
               {recommendationLabel(data.status, data.recommendation, data.overall_score)}
             </span>
-            <a
-              href={api.getPdfUrl(data.id)}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await api.downloadPdf(data.id);
+                } catch {
+                  pushToast('Failed to download PDF.');
+                }
+              }}
               className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
             >
               <Download className="h-4 w-4" />
               Download PDF
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -201,6 +206,12 @@ export function ReviewReport() {
       <Section title="Gemini Research Node Raw Output">
         <pre className="overflow-x-auto rounded-2xl bg-slate-950 p-5 text-xs leading-6 text-slate-100 whitespace-pre-wrap">
           {data.research_llm_raw_output?.trim() || 'No raw research-node Gemini output was stored for this review.'}
+        </pre>
+      </Section>
+
+      <Section title="OpenReview Real Review Examples">
+        <pre className="overflow-x-auto rounded-2xl bg-slate-950 p-5 text-xs leading-6 text-slate-100 whitespace-pre-wrap">
+          {data.openreview_examples_prompt?.trim() || 'No OpenReview review examples were stored for this review.'}
         </pre>
       </Section>
 

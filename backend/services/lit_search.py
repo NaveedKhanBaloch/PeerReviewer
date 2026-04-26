@@ -58,6 +58,27 @@ def _title_search_queries(title: str) -> list[str]:
     return deduped
 
 
+def _looks_like_noisy_query(value: str) -> bool:
+    """Reject abstract-like or excessively long queries before hitting Semantic Scholar."""
+    cleaned = " ".join((value or "").split()).strip()
+    if not cleaned:
+        return True
+    lowered = cleaned.lower()
+    if lowered.startswith("abstract "):
+        return True
+    if len(cleaned) > 160:
+        return True
+    if cleaned.count(".") >= 2:
+        return True
+    return False
+
+
+def _sanitize_query(value: str, max_words: int = 10) -> str:
+    """Normalize a search query into a short Semantic Scholar-safe string."""
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-]+", value or "")
+    return " ".join(tokens[:max_words]).strip()
+
+
 def _author_tokens(authors: list[str] | str | None) -> set[str]:
     """Extract stable author-name tokens for loose overlap checks."""
     if not authors:
@@ -226,11 +247,21 @@ async def _semantic_scholar_title_match(session: aiohttp.ClientSession, query: s
     return data if isinstance(data, list) else []
 
 
-async def search_related_papers(title: str, abstract: str, api_key: str) -> list[dict]:
+async def search_related_papers(title: str, abstract: str, api_key: str, search_query: str = "") -> list[dict]:
     """Search Semantic Scholar by exact title and keywords, then return normalized results."""
-    keywords = _extract_keywords(title, abstract)
-    title_queries = _title_search_queries(title)
-    if not keywords and not title_queries:
+    clean_title = "" if _looks_like_noisy_query(title) else title
+    clean_search_query = "" if _looks_like_noisy_query(search_query) else search_query
+    title_queries = _title_search_queries(clean_title)
+    keyword_seed = clean_search_query or clean_title
+    keywords = _extract_keywords(keyword_seed, abstract)
+    query_terms = []
+    if clean_search_query:
+        query_terms.append(_sanitize_query(clean_search_query, 10))
+    if keywords:
+        query_terms.append(" ".join(keywords))
+    deduped_keyword_queries = [query for query in dict.fromkeys(query_terms) if query]
+
+    if not title_queries and not deduped_keyword_queries:
         return []
 
     timeout = aiohttp.ClientTimeout(total=20)
@@ -248,20 +279,20 @@ async def search_related_papers(title: str, abstract: str, api_key: str) -> list
             except Exception as exc:
                 logger.warning("Semantic Scholar exact-title search failed for %r: %s", query, exc)
 
-        if keywords:
+        for query in deduped_keyword_queries:
             try:
-                for paper in await _semantic_scholar_search(session, " ".join(keywords), api_key, 15):
+                for paper in await _semantic_scholar_search(session, query, api_key, 15):
                     paper_map.setdefault(_paper_key(paper), paper)
             except Exception as exc:
-                logger.warning("Semantic Scholar keyword search failed: %s", exc)
+                logger.warning("Semantic Scholar keyword search failed for %r: %s", query, exc)
 
     papers = list(paper_map.values())
     if not papers:
-        logger.warning("Semantic Scholar returned zero results for title/query: %s", title)
+        logger.warning("Semantic Scholar returned zero results for title/query: %s", clean_title or clean_search_query)
         return []
 
     normalized = [_normalize_semantic_paper(paper) for paper in papers]
-    duplicate_check = detect_publication_duplicate(title, [], normalized)
+    duplicate_check = detect_publication_duplicate(clean_title, [], normalized)
     duplicate_ids = {match.get("s2_paper_id") for match in duplicate_check.get("matches", [])}
 
     return sorted(

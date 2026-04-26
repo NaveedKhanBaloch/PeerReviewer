@@ -97,33 +97,6 @@ def _is_already_published(state: AgentState) -> bool:
     return publication_check.get("status") == "already_published"
 
 
-def _model_reports_duplicate_publication(review_data: dict) -> bool:
-    """Detect duplicate-publication language in model output as a fallback guardrail."""
-    duplicate_phrases = (
-        "duplicate publication",
-        "already published",
-        "previously published",
-        "verbatim copy",
-        "direct copy",
-        "published article",
-    )
-    text_parts = [
-        _as_text(review_data.get("summary")),
-        _as_text(review_data.get("general_comments")),
-    ]
-    for flaw in _as_list(review_data.get("major_flaws")):
-        if isinstance(flaw, dict):
-            text_parts.extend(
-                [
-                    _as_text(flaw.get("issue")),
-                    _as_text(flaw.get("evidence")),
-                    _as_text(flaw.get("remedy")),
-                ]
-            )
-    combined = " ".join(text_parts).lower()
-    return any(phrase in combined for phrase in duplicate_phrases)
-
-
 def _cap_dimension_scores_for_duplicate(dimension_scores: list[dict]) -> list[dict]:
     """Cap originality and ethics dimensions when the manuscript is already published."""
     for item in dimension_scores:
@@ -147,8 +120,7 @@ def _cap_dimension_scores_for_duplicate(dimension_scores: list[dict]) -> list[di
 def _apply_publication_duplicate_guardrail(review_data: dict, state: AgentState) -> dict:
     """Force review consistency when the uploaded manuscript appears already published."""
     already_published = _is_already_published(state)
-    model_reported_duplicate = _model_reports_duplicate_publication(review_data)
-    if not already_published and not model_reported_duplicate:
+    if not already_published:
         return review_data
 
     publication_check = state.get("publication_check") or state.get("research_analysis", {}).get("publication_check") or {}
@@ -264,7 +236,7 @@ def _build_review_prompt(state: AgentState) -> str:
     research_analysis_text = json.dumps(state.get("research_analysis", {}), indent=2)
     publication_check_text = json.dumps(state.get("publication_check", {}), indent=2)
 
-    return f"""PAPER TO REVIEW
+    prompt = f"""PAPER TO REVIEW
 ===============
 Title: {state.get('title', 'Unknown')}
 Authors: {', '.join(state.get('authors', []))}
@@ -301,6 +273,12 @@ If publication_check.status is already_published, treat it as a fatal originalit
 recommend Reject, set originality/novelty score no higher than 1/10, and explain the matched publication.
 Every critical issue must cite a specific section, table, or figure.
 Return ONLY valid JSON."""
+
+    openreview_block = state.get("openreview_examples_prompt", "")
+    if openreview_block and openreview_block.strip():
+        prompt += f"\n\n{openreview_block}"
+
+    return prompt
 
 
 async def review_node(state: AgentState) -> dict:

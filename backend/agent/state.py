@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     field: str
     research_analysis: Dict[str, object]
     related_papers: List[dict]
+    openreview_examples_prompt: str
     publication_check: Dict[str, object]
     research_llm_raw_output: str
     dimension_scores: List[dict]

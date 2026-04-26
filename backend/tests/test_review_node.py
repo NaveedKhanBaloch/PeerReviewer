@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 
 from agent.graph import _route_after_research
-from agent.nodes.research_node import _duplicate_publication_result, _title_candidates
+from agent.nodes.research_node import _duplicate_publication_result, _is_bad_title_candidate, _title_candidates, _trim_first_page_before_abstract
 from agent.nodes.review_node import _apply_publication_duplicate_guardrail, _load_json_output, _normalize_review_data, review_node
-from services.lit_search import detect_publication_duplicate, titles_match_exact
+from services.lit_search import _sanitize_query, detect_publication_duplicate, titles_match_exact
+from services.openreview_service import _query_tokens, fetch_openreview_examples
 
 
 def _base_state() -> dict:
@@ -143,6 +144,14 @@ def test_detect_publication_duplicate_does_not_stop_on_near_match():
     assert titles_match_exact(title, related[0]["title"]) is False
 
 
+def test_titles_match_exact_rejects_topic_level_paraphrase():
+    """Topic-level paraphrases must not count as exact title matches."""
+    extracted = "Application mapping of Network on chip, highly optimized, meta-heuristic algorithm"
+    semantic_scholar_title = "Application Mapping Using Cuckoo Search Optimization With Lévy Flight for NoC-Based System"
+
+    assert titles_match_exact(extracted, semantic_scholar_title) is False
+
+
 def test_title_candidates_recover_title_when_pdf_header_is_noisy():
     """First-page title lines should be searched when extracted title is wrong."""
     full_text = """
@@ -157,6 +166,63 @@ This paper proposes a hybrid algorithm.
     candidates = _title_candidates("Algorithms", full_text)
 
     assert any("IWO-IGA" in candidate for candidate in candidates)
+
+
+def test_trim_first_page_before_abstract_keeps_only_title_region():
+    """Title extraction should prefer the first-page region before the abstract heading."""
+    text = """
+Application Mapping Using Cuckoo Search Optimization With Lévy Flight for NoC-Based System
+Author One, Author Two
+ABSTRACT
+Network on chip (NoC) is a promising communication infrastructure...
+"""
+
+    trimmed = _trim_first_page_before_abstract(text)
+
+    assert "Application Mapping Using Cuckoo Search" in trimmed
+    assert "promising communication infrastructure" not in trimmed
+
+
+def test_bad_title_candidate_rejects_abstract_like_text():
+    """Abstract paragraphs should never be treated as a valid extracted title."""
+    assert _is_bad_title_candidate(
+        "ABSTRACT Network on chip (NoC) is a promising communication infrastructure for multiple cores on a chip."
+    ) is True
+
+
+def test_sanitize_query_shortens_noisy_semantic_scholar_query():
+    """Semantic Scholar queries should be short and tokenized."""
+    query = _sanitize_query(
+        "ABSTRACT Network on chip (NoC) is a promising communication infrastructure for multiple cores on a chip to exchange data efficiently.",
+        8,
+    )
+
+    assert len(query.split()) == 8
+    assert "NoC" in query
+    assert "infrastructure" not in query
+
+
+def test_openreview_query_tokens_drop_generic_words():
+    """OpenReview matching should use content words rather than generic paper words."""
+    tokens = _query_tokens("Application Mapping Using Cuckoo Search Optimization With Lévy Flight")
+
+    assert "using" not in tokens
+    assert "with" not in tokens
+    assert "cuckoo" in tokens
+    assert "optimization" in tokens
+
+
+@pytest.mark.asyncio
+async def test_openreview_examples_are_skipped_for_unsupported_field():
+    """Hardware / non-ML fields should not pull unrelated OpenReview reviews."""
+    examples = await fetch_openreview_examples(
+        title="Application Mapping Using Cuckoo Search Optimization With Lévy Flight for NoC-Based System",
+        abstract="A hardware paper on NoC application mapping.",
+        field="Computer Architecture",
+        max_examples=3,
+    )
+
+    assert examples == []
 
 
 def test_publication_duplicate_guardrail_forces_reject_and_low_originality():
@@ -200,8 +266,8 @@ def test_publication_duplicate_guardrail_forces_reject_and_low_originality():
     assert normalized["dimension_scores"] == []
 
 
-def test_model_duplicate_language_fallback_removes_scores():
-    """If Gemini reports duplicate publication, the persisted result must not keep originality scoring."""
+def test_model_duplicate_language_without_structured_match_keeps_scores():
+    """Duplicate-sounding model language alone must not force the already-published state."""
     state = {**_base_state(), "research_analysis": {"document_type_valid": True}, "publication_check": {}}
     model_review = {
         "dimension_scores": [{"dimension": "ORIGINALITY & SIGNIFICANCE", "score": 7.0}],
@@ -223,9 +289,9 @@ def test_model_duplicate_language_fallback_removes_scores():
     normalized = _normalize_review_data(guarded)
 
     assert normalized["recommendation"] == "Reject"
-    assert normalized["overall_score"] is None
-    assert normalized["dimension_scores"] == []
-    assert "already published" in normalized["summary"].lower()
+    assert normalized["overall_score"] == 3.9
+    assert len(normalized["dimension_scores"]) == 1
+    assert "already published" not in (normalized["summary"] or "").lower()
 
 
 def test_duplicate_publication_result_is_terminal_without_review_model():

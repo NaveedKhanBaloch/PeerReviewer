@@ -217,6 +217,7 @@ class FullReviewOut(BaseModel):
     dimension_scores: List[DimensionScoreOut]
     related_papers: List[RelatedPaperOut]
     research_llm_raw_output: Optional[str] = None
+    openreview_examples_prompt: Optional[str] = None
     review_llm_raw_output: Optional[str] = None
     created_at: datetime
 

@@ -14,19 +14,29 @@ from agent.progress import emit_progress
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
-from services.lit_search import search_related_papers
+from services.lit_search import search_related_papers, titles_match_exact
+from services.openreview_service import (
+    fetch_openreview_examples,
+    format_examples_for_prompt,
+)
 from services.pdf_extractor import extract_paper
 
 logger = logging.getLogger(__name__)
 
-TITLE_EXTRACTION_SYSTEM_PROMPT = """You extract the exact paper title from the first page of an academic PDF.
+TITLE_EXTRACTION_SYSTEM_PROMPT = """You extract the exact paper title and a clean Semantic Scholar search query from the first page of an academic PDF.
 Return ONLY valid JSON with this schema:
-{"title":"string"}
+{"title":"string","semantic_scholar_query":"string","query_keywords":["string"]}
 Rules:
 - Use only the first page text provided.
-- Return the full manuscript title, not a journal name, header, section label, or author list.
+- Search for the manuscript title only in the text that appears BEFORE the keyword "Abstract" (or "ABSTRACT").
+- Do NOT guess the title from the abstract body or any text after the abstract heading.
+- Return the full manuscript title, not a journal name, header, section label, abstract heading, or author list.
+- If the title is not clearly present before the abstract heading, return title as an empty string "".
+- semantic_scholar_query must be a short, intelligent search query for finding the paper and related work on Semantic Scholar.
+- semantic_scholar_query should usually be 4-10 words, based on distinctive technical terms from the visible first-page content.
+- query_keywords should contain 3-6 short technical keyword phrases.
 - Prefer the best complete title if the text is noisy or line-broken.
-- If you are uncertain, return the strongest full title candidate rather than a fragment."""
+- Never return abstract paragraphs as the title."""
 
 TITLE_MATCH_SYSTEM_PROMPT = """You compare one extracted manuscript title against a list of Semantic Scholar titles.
 Return ONLY valid JSON with this schema:
@@ -39,7 +49,11 @@ Rules:
 - Decide whether any listed title is the same paper as the extracted title.
 - Treat punctuation, dash variants, line-break artifacts, and harmless unicode differences as the same title.
 - Do NOT match merely related or similar papers.
-- Only return matched=true when the titles refer to the same paper.
+- Be STRICT: return matched=true only when all substantive title words match the same paper title after ignoring punctuation, dash variants, capitalization, and harmless unicode differences.
+- If important title words are missing, replaced, or paraphrased, return matched=false.
+- Do NOT infer a title match from abstract meaning, topic similarity, methodology similarity, or domain overlap.
+- Match titles, not descriptions.
+- Only return matched=true when the titles themselves refer to the same paper.
 - If no exact/same-paper match exists, return matched=false and matched_title=null."""
 
 
@@ -80,10 +94,42 @@ def _title_candidates(extracted_title: str, full_text: str) -> list[str]:
     return deduped[:5]
 
 
-async def _extract_title_with_gemini(first_page_text: str, heuristic_title: str) -> str:
-    """Use Gemini Flash to extract the title from first-page text."""
+def _trim_first_page_before_abstract(first_page_text: str) -> str:
+    """Keep only the first-page content before the abstract heading when possible."""
     if not first_page_text.strip():
-        return heuristic_title
+        return ""
+    match = re.search(r"\babstract\b", first_page_text, flags=re.IGNORECASE)
+    if not match:
+        return first_page_text
+    return first_page_text[: match.start()].strip()
+
+
+def _is_bad_title_candidate(value: str) -> bool:
+    """Detect extracted title strings that are clearly abstract-like noise."""
+    cleaned = " ".join((value or "").split()).strip()
+    if not cleaned:
+        return True
+    lowered = cleaned.lower()
+    if lowered.startswith("abstract "):
+        return True
+    if len(cleaned) > 220:
+        return True
+    sentence_markers = sum(cleaned.count(marker) for marker in (". ", "; ", ": "))
+    if sentence_markers >= 2:
+        return True
+    return False
+
+
+async def _extract_search_metadata_with_gemini(first_page_text: str, heuristic_title: str) -> dict:
+    """Use Gemini Flash to extract the title and a clean Semantic Scholar query."""
+    if not first_page_text.strip():
+        return {
+            "title": heuristic_title if not _is_bad_title_candidate(heuristic_title) else "",
+            "semantic_scholar_query": " ".join(_title_candidates(heuristic_title, heuristic_title)[:1]).strip(),
+            "query_keywords": [],
+        }
+
+    pre_abstract_text = _trim_first_page_before_abstract(first_page_text)
 
     llm = ChatGoogleGenerativeAI(
         model=settings.GEMINI_FLASH_MODEL,
@@ -97,14 +143,33 @@ async def _extract_title_with_gemini(first_page_text: str, heuristic_title: str)
             HumanMessage(
                 content=(
                     f"Heuristic title candidate:\n{heuristic_title}\n\n"
-                    f"First page text:\n{first_page_text[:12000]}"
+                    f"First page text before abstract:\n{pre_abstract_text[:8000]}\n\n"
+                    f"Full first page text:\n{first_page_text[:12000]}"
                 )
             ),
         ]
     )
     payload = json.loads(_strip_json_fences(str(response.content).strip()))
     title = str(payload.get("title") or "").strip()
-    return title or heuristic_title
+    semantic_scholar_query = str(payload.get("semantic_scholar_query") or "").strip()
+    query_keywords = [
+        str(item).strip()
+        for item in payload.get("query_keywords", [])
+        if str(item).strip()
+    ][:6]
+
+    if _is_bad_title_candidate(title):
+        title = ""
+    if not semantic_scholar_query:
+        semantic_scholar_query = " ".join(query_keywords[:5]).strip()
+    if not semantic_scholar_query and title:
+        semantic_scholar_query = " ".join(re.findall(r"[A-Za-z0-9][A-Za-z0-9\-]+", title)[:10]).strip()
+
+    return {
+        "title": title,
+        "semantic_scholar_query": semantic_scholar_query,
+        "query_keywords": query_keywords,
+    }
 
 
 async def _match_title_against_related_with_gemini(extracted_title: str, related_papers: list[dict]) -> dict:
@@ -139,10 +204,24 @@ async def _match_title_against_related_with_gemini(extracted_title: str, related
         ]
     )
     payload = json.loads(_strip_json_fences(str(response.content).strip()))
+    matched = bool(payload.get("matched"))
+    matched_title = str(payload.get("matched_title") or "").strip() or None
+    reason = str(payload.get("reason") or "").strip()
+
+    if matched and matched_title and not titles_match_exact(extracted_title, matched_title):
+        return {
+            "matched": False,
+            "matched_title": None,
+            "reason": (
+                "Gemini proposed a match, but the extracted title and Semantic Scholar title "
+                "did not pass strict exact normalized title matching."
+            ),
+        }
+
     return {
-        "matched": bool(payload.get("matched")),
-        "matched_title": payload.get("matched_title"),
-        "reason": str(payload.get("reason") or "").strip(),
+        "matched": matched,
+        "matched_title": matched_title,
+        "reason": reason,
     }
 
 
@@ -175,6 +254,19 @@ def _strip_json_fences(raw_text: str) -> str:
         if text.startswith("json"):
             text = text[4:]
     return text.strip()
+
+
+def _update_research_raw_output(payload: dict, updates: dict) -> None:
+    """Persist debugging metadata for the research node as a JSON string."""
+    existing_raw = updates.get("research_llm_raw_output", "")
+    try:
+        current = json.loads(existing_raw) if existing_raw else {}
+        if not isinstance(current, dict):
+            current = {}
+    except json.JSONDecodeError:
+        current = {"gemini_output": existing_raw} if existing_raw else {}
+    current.update(payload)
+    updates["research_llm_raw_output"] = json.dumps(current)
 
 
 def _duplicate_publication_result(state: dict, publication_check: dict, related: list[dict]) -> dict:
@@ -267,15 +359,19 @@ async def research_node(state: AgentState) -> dict:
                 "page_count": paper["page_count"],
             }
         )
-        gemini_title = await _extract_title_with_gemini(
+        search_metadata = await _extract_search_metadata_with_gemini(
             str(paper.get("first_page_text") or ""),
             str(paper["title"]),
         )
-        updates["title"] = gemini_title
+        gemini_title = str(search_metadata.get("title") or "").strip()
+        semantic_scholar_query = str(search_metadata.get("semantic_scholar_query") or "").strip()
+        query_keywords = search_metadata.get("query_keywords", [])
+        updates["title"] = gemini_title or paper["title"]
         updates["progress_messages"].append(
-            f"Paper extracted: {gemini_title[:60]}... ({paper['page_count']} pages)"
+            f"Paper extracted: {(gemini_title or paper['title'])[:60]}... ({paper['page_count']} pages)"
         )
-        logger.info("Extracted title from PDF with Gemini: %s", gemini_title)
+        logger.info("Extracted title from PDF with Gemini: %s", gemini_title or "(empty)")
+        logger.info("Semantic Scholar query from Gemini: %s", semantic_scholar_query or "(empty)")
 
         updates["progress_messages"].append("Searching related literature...")
         await emit_progress(state["review_id"], "literature", "Searching related literature")
@@ -283,10 +379,11 @@ async def research_node(state: AgentState) -> dict:
             title=gemini_title,
             abstract=paper["abstract"],
             api_key=settings.SEMANTIC_SCHOLAR_API_KEY,
+            search_query=semantic_scholar_query,
         )
-        updates["title_candidates_checked"] = [gemini_title]
+        updates["title_candidates_checked"] = [value for value in [gemini_title, semantic_scholar_query, *query_keywords] if value]
 
-        logger.info("Extracted title:\n%s\n", gemini_title)
+        logger.info("Extracted title:\n%s\n", gemini_title or "(empty)")
         related_titles = [str(item.get("title") or "") for item in related if item.get("title")]
         logger.info("Semantic Scholar related paper titles:\n%s\n", "\n".join(related_titles) if related_titles else "(none)")
         title_match = await _match_title_against_related_with_gemini(gemini_title, related)
@@ -382,7 +479,9 @@ Analyse the novelty and field of this paper."""
             {
                 "heuristic_title": paper["title"],
                 "extracted_title": gemini_title,
-                "title_candidates_checked": [gemini_title],
+                "semantic_scholar_query": semantic_scholar_query,
+                "query_keywords": query_keywords,
+                "title_candidates_checked": updates["title_candidates_checked"],
                 "gemini_output": raw_output,
             }
         )
@@ -406,6 +505,53 @@ Analyse the novelty and field of this paper."""
         updates["progress_messages"].append(
             f"Field detected: {updates['field']}. Novelty score: {novelty_data.get('novelty_score', 'N/A')}"
         )
+
+        try:
+            updates["progress_messages"].append(
+                "Fetching real peer review examples from OpenReview..."
+            )
+            await emit_progress(
+                state["review_id"],
+                "openreview",
+                "Fetching real peer review examples from OpenReview...",
+            )
+            examples = await fetch_openreview_examples(
+                title=updates.get("title") or state.get("title", ""),
+                abstract=updates.get("abstract") or state.get("abstract", ""),
+                field=updates.get("field") or state.get("field", "default"),
+                max_examples=3,
+            )
+            prompt_block = format_examples_for_prompt(examples)
+            updates["openreview_examples_prompt"] = prompt_block
+
+            if examples:
+                total_reviews = sum(len(example.get("reviews", [])) for example in examples)
+                updates["progress_messages"].append(
+                    f"Found {len(examples)} similar papers with {total_reviews} "
+                    f"real human reviews from OpenReview — using as calibration examples"
+                )
+            else:
+                updates["openreview_examples_prompt"] = ""
+                updates["progress_messages"].append(
+                    "No similar OpenReview examples found — proceeding without examples"
+                )
+            _update_research_raw_output(
+                {
+                    "openreview_examples_prompt": updates.get("openreview_examples_prompt", ""),
+                    "openreview_examples_count": len(examples),
+                },
+                updates,
+            )
+        except Exception as exc:
+            logger.warning("OpenReview fetch failed (non-fatal, pipeline continues): %s", exc)
+            updates["openreview_examples_prompt"] = ""
+            _update_research_raw_output(
+                {
+                    "openreview_examples_prompt": "",
+                    "openreview_examples_count": 0,
+                },
+                updates,
+            )
     except Exception as exc:
         user_message = format_model_error(exc)
         logger.error(

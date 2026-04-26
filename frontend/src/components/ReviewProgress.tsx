@@ -1,17 +1,19 @@
-import { Brain, Check, FileDown, FileText, Microscope, Search, X } from 'lucide-react';
+import { BookOpen, Brain, Check, FileDown, FileText, Microscope, Search, X } from 'lucide-react';
 import { useReviewStore } from '../stores/reviewStore';
 
 const steps = [
   { key: 'extracting', label: 'Extracting PDF content', Icon: FileText },
   { key: 'literature', label: 'Searching related literature', Icon: Search },
   { key: 'analysing', label: 'Analysing research field & novelty', Icon: Microscope },
+  { key: 'openreview', label: 'Fetching real review examples', Icon: BookOpen },
   { key: 'reviewing', label: 'Running peer review analysis', Icon: Brain },
   { key: 'generating_pdf', label: 'Generating PDF report', Icon: FileDown },
 ];
 
 export function ReviewProgress() {
   const { currentProgress } = useReviewStore();
-  const currentStep = currentProgress?.step ?? 'extracting';
+  const message = currentProgress?.message ?? '';
+  const currentStep = /openreview/i.test(message) ? 'openreview' : currentProgress?.step ?? 'extracting';
   const isFailed = currentStep === 'failed';
   const activeIndex = currentStep === 'complete' ? steps.length : Math.max(steps.findIndex((step) => step.key === currentStep), 0);
 

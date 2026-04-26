@@ -134,9 +134,18 @@ export function ReviewSidebar() {
                   <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
                     <a
                       href={api.getPdfUrl(review.id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(event) => review.status !== 'complete' && event.preventDefault()}
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (review.status !== 'complete') {
+                          return;
+                        }
+                        try {
+                          await api.downloadPdf(review.id);
+                        } catch {
+                          pushToast('Failed to download PDF.');
+                        }
+                      }}
                       className="rounded-full p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white"
                     >
                       <Download className="h-4 w-4" />
