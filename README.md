@@ -141,12 +141,12 @@ npm run build
 
 ## Render Deployment
 
-This repository includes a `render.yaml` Blueprint for a production-style Render deployment:
+This repository includes a `render.yaml` Blueprint for a free Render demo deployment:
 
 - `research-reviewer-web`: React/Vite static site
-- `research-reviewer-api`: Dockerized FastAPI backend
-- `research-reviewer-grobid`: private GROBID Docker service
-- `research-reviewer-db`: managed Render Postgres database
+- `research-reviewer-api`: Dockerized FastAPI backend on a free web service
+- `research-reviewer-grobid`: public GROBID Docker web service on a free web service
+- `research-reviewer-db`: free managed Render Postgres database
 
 To deploy:
 
@@ -155,7 +155,9 @@ To deploy:
 3. When prompted, provide `GEMINI_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY`.
 4. Apply the Blueprint.
 
-The backend stores generated PDFs and uploads on a Render persistent disk mounted at `/var/data`, with `OUTPUTS_DIR=/var/data/outputs` and `UPLOADS_DIR=/var/data/uploads`. The backend uses Render's internal Postgres URL and internal GROBID private-service address. The frontend uses the public backend URL through `VITE_API_URL`.
+The free Blueprint avoids paid Render features. It stores temporary uploaded files and generated PDFs under `/tmp/research-reviewer`, so files can disappear when the service restarts. The free Postgres database is limited to 1 GB and expires after 30 days unless upgraded. The frontend uses the public backend URL through `VITE_API_URL`.
+
+For production, upgrade the backend and GROBID to paid services, move GROBID back to a private service, and add persistent storage or object storage for uploaded PDFs and generated reports.
 
 If Render assigns different public service URLs, update these values in `render.yaml` or the Render dashboard:
 

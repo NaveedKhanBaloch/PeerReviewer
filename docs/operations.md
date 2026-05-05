@@ -61,13 +61,12 @@ docker compose up -d
 
 ## Render Deployment
 
-The repository root includes `render.yaml`, which creates:
+The repository root includes `render.yaml`, which creates a free Render demo deployment:
 
-- a Dockerized FastAPI web service
-- a private GROBID service from the `grobid/grobid:0.8.0` Docker image
+- a Dockerized FastAPI free web service
+- a public GROBID free web service from the `grobid/grobid:0.8.0` Docker image
 - a React/Vite static site
-- a managed Render Postgres database
-- a persistent disk mounted at `/var/data` for uploads and generated PDFs
+- a free managed Render Postgres database
 
 Create a new Render Blueprint instance from the repository and provide the prompted secret values:
 
@@ -77,6 +76,8 @@ SEMANTIC_SCHOLAR_API_KEY=...
 ```
 
 Render injects the database internal connection string into `DATABASE_URL`. The backend normalizes Render's `postgresql://...` URL to SQLAlchemy's async `postgresql+asyncpg://...` driver URL at startup.
+
+The free Blueprint avoids paid persistent disks by using `/tmp/research-reviewer` for uploads and generated PDFs. This storage is ephemeral and can be cleared when the backend restarts. Free Render Postgres is limited to 1 GB and expires after 30 days unless upgraded.
 
 Render cannot use its private service hostname directly in browser code, so the frontend must use the public backend URL:
 
@@ -91,6 +92,8 @@ ALLOWED_ORIGINS=https://research-reviewer-web.onrender.com
 ```
 
 If Render assigns different URLs or you add custom domains, update both values in the Render dashboard or `render.yaml`.
+
+For production, upgrade the backend and GROBID services to paid instances, use a private service for GROBID, and add persistent storage or object storage for uploaded PDFs and generated reports.
 
 ## Testing and Validation
 
