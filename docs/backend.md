@@ -27,7 +27,7 @@ Important settings:
 - `UPLOADS_DIR`
 - `ENVIRONMENT`
 
-On Render, the Blueprint injects `GROBID_HOSTPORT` from the private GROBID service and the backend derives `GROBID_URL` from it. Render Postgres provides a `postgresql://...` connection string; the backend normalizes it to `postgresql+asyncpg://...` for SQLAlchemy's async engine.
+For managed Postgres providers, the backend normalizes `postgresql://...` and `postgres://...` connection strings to `postgresql+asyncpg://...` for SQLAlchemy's async engine. `GROBID_URL` should point to the GROBID service; on Railway this is usually `http://grobid.railway.internal:8070`.
 
 ## Database Session Management
 

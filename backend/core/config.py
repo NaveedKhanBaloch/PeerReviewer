@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        """Use SQLAlchemy's async Postgres driver for Render database URLs."""
+        """Use SQLAlchemy's async Postgres driver for managed Postgres URLs."""
         if value.startswith("postgres://"):
             return value.replace("postgres://", "postgresql+asyncpg://", 1)
         if value.startswith("postgresql://"):
@@ -43,8 +43,8 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def derive_render_service_urls(self) -> "Settings":
-        """Build private-service URLs from Render host:port references."""
+    def derive_service_urls(self) -> "Settings":
+        """Build GROBID URLs from host:port references when provided."""
         if self.GROBID_HOSTPORT and self.GROBID_URL in {"", "http://localhost:8070"}:
             self.GROBID_URL = f"http://{self.GROBID_HOSTPORT}"
         return self

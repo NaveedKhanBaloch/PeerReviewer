@@ -27,7 +27,6 @@ Create a root `.env` file for local development and set:
 GEMINI_API_KEY=your_gemini_api_key_here
 SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 GROBID_URL=http://localhost:8070
-GROBID_HOSTPORT=
 DATABASE_URL=sqlite+aiosqlite:///./reviews.db
 OUTPUTS_DIR=outputs
 UPLOADS_DIR=uploads
@@ -59,41 +58,46 @@ docker compose up -d
 - use managed Postgres instead of SQLite
 - preserve uploaded PDFs and generated reports on persistent storage
 
-## Render Deployment
+## Railway Deployment
 
-The repository root includes `render.yaml`, which creates a free Render demo deployment:
+Railway deployment uses separate services:
 
-- a Dockerized FastAPI free web service
-- a public GROBID free web service from the `grobid/grobid:0.8.0` Docker image
-- a React/Vite static site
-- a free managed Render Postgres database
+- `api`: Dockerized FastAPI backend from `backend/`
+- `web`: Dockerized React/Vite frontend from `frontend/`
+- `grobid`: Docker image service from `grobid/grobid:0.8.0`
+- `Postgres`: Railway PostgreSQL database
 
-Create a new Render Blueprint instance from the repository and provide the prompted secret values:
+The backend and frontend each include a Railway config:
 
-```env
+```text
+backend/railway.json
+frontend/railway.json
+```
+
+Create the services from GitHub, set each service root directory, and configure environment variables in the Railway dashboard.
+
+Backend variables:
+
+```text
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+GROBID_URL=http://grobid.railway.internal:8070
 GEMINI_API_KEY=...
 SEMANTIC_SCHOLAR_API_KEY=...
+SECRET_KEY=...
+OUTPUTS_DIR=/tmp/research-reviewer/outputs
+UPLOADS_DIR=/tmp/research-reviewer/uploads
+MAX_PDF_SIZE_MB=50
+ENVIRONMENT=production
+ALLOWED_ORIGINS=https://${{web.RAILWAY_PUBLIC_DOMAIN}}
 ```
 
-Render injects the database internal connection string into `DATABASE_URL`. The backend normalizes Render's `postgresql://...` URL to SQLAlchemy's async `postgresql+asyncpg://...` driver URL at startup.
+Frontend variables:
 
-The free Blueprint avoids paid persistent disks by using `/tmp/research-reviewer` for uploads and generated PDFs. This storage is ephemeral and can be cleared when the backend restarts. Free Render Postgres is limited to 1 GB and expires after 30 days unless upgraded.
-
-Render cannot use its private service hostname directly in browser code, so the frontend must use the public backend URL:
-
-```env
-VITE_API_URL=https://research-reviewer-api.onrender.com
+```text
+VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 ```
 
-The backend CORS allowlist must include the public frontend URL:
-
-```env
-ALLOWED_ORIGINS=https://research-reviewer-web.onrender.com
-```
-
-If Render assigns different URLs or you add custom domains, update both values in the Render dashboard or `render.yaml`.
-
-For production, upgrade the backend and GROBID services to paid instances, use a private service for GROBID, and add persistent storage or object storage for uploaded PDFs and generated reports.
+See [Railway Deployment](./railway-deployment.md) for the full procedure. Free Railway deployments are credit-limited, and GROBID may need more memory than the free plan provides during real PDF processing.
 
 ## Testing and Validation
 

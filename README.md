@@ -27,6 +27,7 @@ The project is built as a two-part system:
 - [API Reference](./docs/api-reference.md)
 - [Database Schema](./docs/database-schema.md)
 - [Operations and Deployment Notes](./docs/operations.md)
+- [Railway Deployment](./docs/railway-deployment.md)
 - [Troubleshooting](./docs/troubleshooting.md)
 - PDF bundle: [`AI_Research_Paper_Reviewer_Documentation.pdf`](./docs/AI_Research_Paper_Reviewer_Documentation.pdf)
 
@@ -139,36 +140,51 @@ npm run build
 4. Open the completed review from the sidebar
 5. Scroll to the Gemini raw output sections when debugging model behavior
 
-## Render Deployment
+## Railway Deployment
 
-This repository includes a `render.yaml` Blueprint for a free Render demo deployment:
+This repository includes Railway-ready service configs for a free/demo deployment:
 
-- `research-reviewer-web`: React/Vite static site
-- `research-reviewer-api`: Dockerized FastAPI backend on a free web service
-- `research-reviewer-grobid`: public GROBID Docker web service on a free web service
-- `research-reviewer-db`: free managed Render Postgres database
+- `web`: Dockerized React/Vite frontend from `frontend/`
+- `api`: Dockerized FastAPI backend from `backend/`
+- `grobid`: Docker image service using `grobid/grobid:0.8.0`
+- `Postgres`: Railway PostgreSQL database
 
 To deploy:
 
-1. Push the repository to GitHub/GitLab/Bitbucket.
-2. In Render, create a new Blueprint instance from this repository.
-3. When prompted, provide `GEMINI_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY`.
-4. Apply the Blueprint.
+1. Push the repository to GitHub.
+2. Create a Railway project.
+3. Add Railway Postgres.
+4. Add a `grobid` service from the Docker image `grobid/grobid:0.8.0` and set `PORT=8070`.
+5. Add an `api` service from GitHub with root directory `/backend`.
+6. Add a `web` service from GitHub with root directory `/frontend`.
+7. Generate public domains for `api` and `web`.
 
-The free Blueprint avoids paid Render features. It stores temporary uploaded files and generated PDFs under `/tmp/research-reviewer`, so files can disappear when the service restarts. The free Postgres database is limited to 1 GB and expires after 30 days unless upgraded. The frontend uses the public backend URL through `VITE_API_URL`.
-
-For production, upgrade the backend and GROBID to paid services, move GROBID back to a private service, and add persistent storage or object storage for uploaded PDFs and generated reports.
-
-If Render assigns different public service URLs, update these values in `render.yaml` or the Render dashboard:
+Set the backend variables:
 
 ```env
-VITE_API_URL=https://your-api-service.onrender.com
-ALLOWED_ORIGINS=https://your-frontend-service.onrender.com
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+GROBID_URL=http://grobid.railway.internal:8070
+GEMINI_API_KEY=your_gemini_api_key_here
+SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
+SECRET_KEY=replace-with-a-random-32-plus-character-secret
+OUTPUTS_DIR=/tmp/research-reviewer/outputs
+UPLOADS_DIR=/tmp/research-reviewer/uploads
+MAX_PDF_SIZE_MB=50
+ENVIRONMENT=production
+ALLOWED_ORIGINS=https://${{web.RAILWAY_PUBLIC_DOMAIN}}
 ```
+
+Set the frontend variable:
+
+```env
+VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
+```
+
+See [Railway Deployment](./docs/railway-deployment.md) for the full step-by-step procedure and free-tier caveats.
 
 ## Notes
 
 - The backend environment has been upgraded to Python `3.11+`
-- Production deployments use Render Postgres; SQLite remains the default for local development
+- Production deployments use managed Postgres; SQLite remains the default for local development
 - Existing SQLite databases are patched at startup for backward-compatible schema additions
 - WeasyPrint may require OS-level dependencies on some machines for real PDF rendering
