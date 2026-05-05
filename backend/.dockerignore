@@ -1,0 +1,10 @@
+.venv
+__pycache__
+.pytest_cache
+*.pyc
+test_outputs
+test_uploads
+outputs
+uploads
+reviews.db
+test_reviews.db

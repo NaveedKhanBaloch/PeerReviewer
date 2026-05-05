@@ -30,8 +30,8 @@ logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 logging.getLogger("google_genai").setLevel(logging.WARNING)
 logging.getLogger("google.generativeai").setLevel(logging.WARNING)
-Path(settings.OUTPUTS_DIR).mkdir(exist_ok=True)
-Path(settings.UPLOADS_DIR).mkdir(exist_ok=True)
+Path(settings.OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
+Path(settings.UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
 
 
 def _ensure_sqlite_compatibility(sync_conn) -> None:
@@ -99,8 +99,8 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_sqlite_compatibility)
     await _seed_default_admin()
-    Path(settings.OUTPUTS_DIR).mkdir(exist_ok=True)
-    Path(settings.UPLOADS_DIR).mkdir(exist_ok=True)
+    Path(settings.OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
+    Path(settings.UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
     yield
 
 

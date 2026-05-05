@@ -21,10 +21,13 @@ Important settings:
 - `GEMINI_API_KEY`
 - `SEMANTIC_SCHOLAR_API_KEY`
 - `GROBID_URL`
+- `GROBID_HOSTPORT`
 - `DATABASE_URL`
 - `OUTPUTS_DIR`
 - `UPLOADS_DIR`
 - `ENVIRONMENT`
+
+On Render, the Blueprint injects `GROBID_HOSTPORT` from the private GROBID service and the backend derives `GROBID_URL` from it. Render Postgres provides a `postgresql://...` connection string; the backend normalizes it to `postgresql+asyncpg://...` for SQLAlchemy's async engine.
 
 ## Database Session Management
 
@@ -132,4 +135,3 @@ The backend is configured to:
 - show useful application logs
 - suppress noisy SQL debug output
 - suppress noisy Gemini SDK info logs
-

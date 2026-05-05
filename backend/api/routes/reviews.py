@@ -320,7 +320,7 @@ async def start_review(
         _validate_pdf_file(file, paper_bytes)
         sanitized_name = _sanitize_filename(Path(filename).name)
         upload_dir = Path(settings.UPLOADS_DIR)
-        upload_dir.mkdir(exist_ok=True)
+        upload_dir.mkdir(parents=True, exist_ok=True)
         (upload_dir / sanitized_name).write_bytes(paper_bytes)
         title = Path(filename).stem
     else:

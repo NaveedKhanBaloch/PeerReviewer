@@ -27,6 +27,7 @@ Create a root `.env` file for local development and set:
 GEMINI_API_KEY=your_gemini_api_key_here
 SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 GROBID_URL=http://localhost:8070
+GROBID_HOSTPORT=
 DATABASE_URL=sqlite+aiosqlite:///./reviews.db
 OUTPUTS_DIR=outputs
 UPLOADS_DIR=uploads
@@ -55,7 +56,41 @@ docker compose up -d
 - restrict CORS origins
 - monitor Gemini and Semantic Scholar quotas
 - verify WeasyPrint native dependencies on the host
-- rotate and back up the SQLite database or migrate to a production DB if load grows
+- use managed Postgres instead of SQLite
+- preserve uploaded PDFs and generated reports on persistent storage
+
+## Render Deployment
+
+The repository root includes `render.yaml`, which creates:
+
+- a Dockerized FastAPI web service
+- a private GROBID service from the `grobid/grobid:0.8.0` Docker image
+- a React/Vite static site
+- a managed Render Postgres database
+- a persistent disk mounted at `/var/data` for uploads and generated PDFs
+
+Create a new Render Blueprint instance from the repository and provide the prompted secret values:
+
+```env
+GEMINI_API_KEY=...
+SEMANTIC_SCHOLAR_API_KEY=...
+```
+
+Render injects the database internal connection string into `DATABASE_URL`. The backend normalizes Render's `postgresql://...` URL to SQLAlchemy's async `postgresql+asyncpg://...` driver URL at startup.
+
+Render cannot use its private service hostname directly in browser code, so the frontend must use the public backend URL:
+
+```env
+VITE_API_URL=https://research-reviewer-api.onrender.com
+```
+
+The backend CORS allowlist must include the public frontend URL:
+
+```env
+ALLOWED_ORIGINS=https://research-reviewer-web.onrender.com
+```
+
+If Render assigns different URLs or you add custom domains, update both values in the Render dashboard or `render.yaml`.
 
 ## Testing and Validation
 

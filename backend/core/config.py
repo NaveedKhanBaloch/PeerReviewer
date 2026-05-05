@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     GEMINI_PRO_MODEL: str = "gemini-2.5-pro"
     SEMANTIC_SCHOLAR_API_KEY: str = ""
     GROBID_URL: str = "http://localhost:8070"
+    GROBID_HOSTPORT: str = ""
     DATABASE_URL: str = "sqlite+aiosqlite:///./reviews.db"
     OUTPUTS_DIR: str = "outputs"
     UPLOADS_DIR: str = "uploads"
@@ -30,10 +32,27 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Use SQLAlchemy's async Postgres driver for Render database URLs."""
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return value
+
+    @model_validator(mode="after")
+    def derive_render_service_urls(self) -> "Settings":
+        """Build private-service URLs from Render host:port references."""
+        if self.GROBID_HOSTPORT and self.GROBID_URL in {"", "http://localhost:8070"}:
+            self.GROBID_URL = f"http://{self.GROBID_HOSTPORT}"
+        return self
+
     def get_outputs_path(self) -> Path:
         """Ensure the outputs directory exists and return it."""
         path = Path(self.OUTPUTS_DIR)
-        path.mkdir(exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
         return path
 
 

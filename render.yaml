@@ -1,0 +1,78 @@
+services:
+  - type: pserv
+    name: research-reviewer-grobid
+    runtime: image
+    plan: starter
+    region: oregon
+    image:
+      url: docker.io/grobid/grobid:0.8.0
+    envVars:
+      - key: PORT
+        value: 8070
+
+  - type: web
+    name: research-reviewer-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    preDeployCommand: alembic upgrade head
+    disk:
+      name: review-files
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: research-reviewer-db
+          property: connectionString
+      - key: GROBID_HOSTPORT
+        fromService:
+          type: pserv
+          name: research-reviewer-grobid
+          property: hostport
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SEMANTIC_SCHOLAR_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OUTPUTS_DIR
+        value: /var/data/outputs
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: MAX_PDF_SIZE_MB
+        value: 50
+      - key: ENVIRONMENT
+        value: production
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 60
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 30
+      - key: ALLOWED_ORIGINS
+        value: https://research-reviewer-web.onrender.com
+
+  - type: web
+    name: research-reviewer-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://research-reviewer-api.onrender.com
+
+databases:
+  - name: research-reviewer-db
+    plan: basic-256mb
+    region: oregon
+    databaseName: research_reviewer
+    user: research_reviewer
+    postgresMajorVersion: "16"
+    diskSizeGB: 15
+    ipAllowList: []

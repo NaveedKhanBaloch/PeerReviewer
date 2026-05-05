@@ -158,7 +158,7 @@ async def generate_review_pdf(review_data: dict, review_id: str) -> str:
     """
 
     output_dir = Path(settings.OUTPUTS_DIR)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{review_id}.pdf"
     HTML(string=html).write_pdf(output_path)
     return str(output_path.resolve())

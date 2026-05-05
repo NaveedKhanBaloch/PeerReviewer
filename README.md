@@ -139,8 +139,34 @@ npm run build
 4. Open the completed review from the sidebar
 5. Scroll to the Gemini raw output sections when debugging model behavior
 
+## Render Deployment
+
+This repository includes a `render.yaml` Blueprint for a production-style Render deployment:
+
+- `research-reviewer-web`: React/Vite static site
+- `research-reviewer-api`: Dockerized FastAPI backend
+- `research-reviewer-grobid`: private GROBID Docker service
+- `research-reviewer-db`: managed Render Postgres database
+
+To deploy:
+
+1. Push the repository to GitHub/GitLab/Bitbucket.
+2. In Render, create a new Blueprint instance from this repository.
+3. When prompted, provide `GEMINI_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY`.
+4. Apply the Blueprint.
+
+The backend stores generated PDFs and uploads on a Render persistent disk mounted at `/var/data`, with `OUTPUTS_DIR=/var/data/outputs` and `UPLOADS_DIR=/var/data/uploads`. The backend uses Render's internal Postgres URL and internal GROBID private-service address. The frontend uses the public backend URL through `VITE_API_URL`.
+
+If Render assigns different public service URLs, update these values in `render.yaml` or the Render dashboard:
+
+```env
+VITE_API_URL=https://your-api-service.onrender.com
+ALLOWED_ORIGINS=https://your-frontend-service.onrender.com
+```
+
 ## Notes
 
 - The backend environment has been upgraded to Python `3.11+`
+- Production deployments use Render Postgres; SQLite remains the default for local development
 - Existing SQLite databases are patched at startup for backward-compatible schema additions
 - WeasyPrint may require OS-level dependencies on some machines for real PDF rendering
