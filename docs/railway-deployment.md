@@ -4,7 +4,7 @@ This project deploys to Railway as four resources:
 
 - `api`: Dockerized FastAPI backend from `backend/`
 - `web`: Dockerized React/Vite frontend from `frontend/`
-- `grobid`: Docker image service using `grobid/grobid:0.8.0`
+- `grobid`: Docker image service using `grobid/grobid:0.8.2-crf`
 - `Postgres`: Railway PostgreSQL database
 
 ## Free Plan Notes
@@ -21,10 +21,10 @@ Add a Railway PostgreSQL database to the project. Railway will expose a `DATABAS
 
 ### 2. GROBID
 
-Create an empty service named `grobid`, then deploy the Docker image:
+Create a service named `grobid` from a Docker image:
 
 ```text
-grobid/grobid:0.8.0
+grobid/grobid:0.8.2-crf
 ```
 
 Set:
@@ -49,10 +49,10 @@ Set the service root directory to:
 /backend
 ```
 
-Set the config file path to:
+Do not set a Railway config file path. Railway should auto-detect:
 
 ```text
-backend/railway.json
+backend/Dockerfile
 ```
 
 Set variables:
@@ -84,10 +84,10 @@ Set the service root directory to:
 /frontend
 ```
 
-Set the config file path to:
+Do not set a Railway config file path. Railway should auto-detect:
 
 ```text
-frontend/railway.json
+frontend/Dockerfile
 ```
 
 Set variables:

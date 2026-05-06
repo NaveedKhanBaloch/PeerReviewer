@@ -64,17 +64,17 @@ Railway deployment uses separate services:
 
 - `api`: Dockerized FastAPI backend from `backend/`
 - `web`: Dockerized React/Vite frontend from `frontend/`
-- `grobid`: Docker image service from `grobid/grobid:0.8.0`
+- `grobid`: Docker image service from `grobid/grobid:0.8.2-crf`
 - `Postgres`: Railway PostgreSQL database
 
-The backend and frontend each include a Railway config:
+The backend and frontend each include a Dockerfile:
 
 ```text
-backend/railway.json
-frontend/railway.json
+backend/Dockerfile
+frontend/Dockerfile
 ```
 
-Create the services from GitHub, set each service root directory, and configure environment variables in the Railway dashboard.
+Create the services from GitHub, set each service root directory, leave the Railway Config File empty, and configure environment variables in the Railway dashboard.
 
 Backend variables:
 

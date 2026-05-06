@@ -142,11 +142,11 @@ npm run build
 
 ## Railway Deployment
 
-This repository includes Railway-ready service configs for a free/demo deployment:
+This repository includes Dockerfiles for a Railway free/demo deployment:
 
 - `web`: Dockerized React/Vite frontend from `frontend/`
 - `api`: Dockerized FastAPI backend from `backend/`
-- `grobid`: Docker image service using `grobid/grobid:0.8.0`
+- `grobid`: Docker image service using `grobid/grobid:0.8.2-crf`
 - `Postgres`: Railway PostgreSQL database
 
 To deploy:
@@ -154,9 +154,9 @@ To deploy:
 1. Push the repository to GitHub.
 2. Create a Railway project.
 3. Add Railway Postgres.
-4. Add a `grobid` service from the Docker image `grobid/grobid:0.8.0` and set `PORT=8070`.
-5. Add an `api` service from GitHub with root directory `/backend`.
-6. Add a `web` service from GitHub with root directory `/frontend`.
+4. Add a `grobid` service from the Docker image `grobid/grobid:0.8.2-crf` and set `PORT=8070`.
+5. Add an `api` service from GitHub with root directory `/backend`; leave Railway Config File empty so Railway auto-detects `backend/Dockerfile`.
+6. Add a `web` service from GitHub with root directory `/frontend`; leave Railway Config File empty so Railway auto-detects `frontend/Dockerfile`.
 7. Generate public domains for `api` and `web`.
 
 Set the backend variables:
