@@ -36,6 +36,11 @@ class Recommendation(str, enum.Enum):
     reject = "Reject"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Return enum values for SQLAlchemy persistence."""
+    return [str(member.value) for member in enum_cls]
+
+
 class UserRole(str, enum.Enum):
     """Application user roles."""
 
@@ -83,7 +88,7 @@ class Review(Base):
         default=ReviewStatus.pending,
     )
     recommendation: Mapped[Optional[Recommendation]] = mapped_column(
-        Enum(Recommendation, name="recommendation"),
+        Enum(Recommendation, name="recommendation", values_callable=enum_values),
         nullable=True,
     )
     overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

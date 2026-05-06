@@ -127,11 +127,18 @@ def _coerce_recommendation(value: Optional[str]) -> Optional[Recommendation]:
     """Convert model recommendation text to the database enum when supported."""
     if not value:
         return None
+    if isinstance(value, Recommendation):
+        return value
+    normalized = str(value).strip()
     try:
-        return Recommendation(value)
+        return Recommendation(normalized)
     except ValueError:
-        logger.warning("Ignoring unsupported recommendation value: %s", value)
-        return None
+        pass
+    for recommendation in Recommendation:
+        if normalized.lower() in {recommendation.name.lower(), recommendation.value.lower()}:
+            return recommendation
+    logger.warning("Ignoring unsupported recommendation value: %s", value)
+    return None
 
 
 def _check_rate_limit(ip_address: str) -> None:
@@ -288,6 +295,7 @@ async def run_pipeline(review_id: str, paper_bytes: Optional[bytes], arxiv_id: O
             await _create_progress_event(session, review_id, "complete", "Review complete")
         except Exception as exc:
             logger.error("Pipeline failed for %s: %s", review_id, exc, exc_info=True)
+            await session.rollback()
             review.status = ReviewStatus.failed
             review.error_message = str(exc) if settings.ENVIRONMENT == "development" else "Internal review error."
             await session.commit()
