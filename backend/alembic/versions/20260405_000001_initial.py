@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260405_000001"
@@ -17,8 +18,8 @@ branch_labels = None
 depends_on = None
 
 
-review_status = sa.Enum("pending", "processing", "complete", "failed", name="review_status")
-recommendation = sa.Enum("Accept", "Minor revision", "Major revision", "Reject", name="recommendation")
+review_status = postgresql.ENUM("pending", "processing", "complete", "failed", name="review_status", create_type=False)
+recommendation = postgresql.ENUM("Accept", "Minor revision", "Major revision", "Reject", name="recommendation", create_type=False)
 
 
 def upgrade() -> None:

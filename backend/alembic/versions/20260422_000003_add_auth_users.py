@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260422_000003"
@@ -18,6 +19,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    user_role = postgresql.ENUM("admin", "user", name="user_role", create_type=False)
+    user_role.create(op.get_bind(), checkfirst=True)
     existing_tables = set(sa.inspect(op.get_bind()).get_table_names())
     if "users" not in existing_tables:
         op.create_table(
@@ -27,7 +30,7 @@ def upgrade() -> None:
             sa.Column("username", sa.String(length=100), nullable=False),
             sa.Column("full_name", sa.String(length=200), nullable=True),
             sa.Column("hashed_password", sa.String(length=255), nullable=False),
-            sa.Column("role", sa.Enum("admin", "user", name="user_role"), nullable=False),
+            sa.Column("role", user_role, nullable=False),
             sa.Column("is_active", sa.Boolean(), nullable=False),
             sa.Column("avatar_url", sa.String(length=500), nullable=True),
             sa.Column("organisation", sa.String(length=200), nullable=True),
