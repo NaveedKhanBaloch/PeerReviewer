@@ -203,24 +203,6 @@ export function ReviewReport() {
         )}
       </Section>
 
-      <Section title="Gemini Research Node Raw Output">
-        <pre className="overflow-x-auto rounded-2xl bg-slate-950 p-5 text-xs leading-6 text-slate-100 whitespace-pre-wrap">
-          {data.research_llm_raw_output?.trim() || 'No raw research-node Gemini output was stored for this review.'}
-        </pre>
-      </Section>
-
-      <Section title="OpenReview Real Review Examples">
-        <pre className="overflow-x-auto rounded-2xl bg-slate-950 p-5 text-xs leading-6 text-slate-100 whitespace-pre-wrap">
-          {data.openreview_examples_prompt?.trim() || 'No OpenReview review examples were stored for this review.'}
-        </pre>
-      </Section>
-
-      <Section title="Gemini Review Node Raw Output">
-        <pre className="overflow-x-auto rounded-2xl bg-slate-950 p-5 text-xs leading-6 text-slate-100 whitespace-pre-wrap">
-          {data.review_llm_raw_output?.trim() || 'No raw review-node Gemini output was stored for this review.'}
-        </pre>
-      </Section>
-
       <div className="pb-6 text-sm text-slate-500">
         Review generated on {new Date(data.created_at).toLocaleDateString()}
       </div>

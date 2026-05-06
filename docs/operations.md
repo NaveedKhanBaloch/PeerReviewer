@@ -28,11 +28,13 @@ GEMINI_API_KEY=your_gemini_api_key_here
 SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 GROBID_URL=http://localhost:8070
 DATABASE_URL=sqlite+aiosqlite:///./reviews.db
-OUTPUTS_DIR=outputs
-UPLOADS_DIR=uploads
+OUTPUTS_DIR=../runtime/outputs
+UPLOADS_DIR=../runtime/uploads
 MAX_PDF_SIZE_MB=50
 ENVIRONMENT=development
 ```
+
+Keep `OUTPUTS_DIR` and `UPLOADS_DIR` outside `backend/` when running with `uvicorn --reload`; otherwise uploads and generated PDFs can trigger a reload and break the active browser connection.
 
 ## Optional Services
 

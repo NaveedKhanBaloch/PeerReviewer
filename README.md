@@ -59,8 +59,8 @@ GEMINI_API_KEY=your_gemini_api_key_here
 SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 GROBID_URL=http://localhost:8070
 DATABASE_URL=sqlite+aiosqlite:///./reviews.db
-OUTPUTS_DIR=outputs
-UPLOADS_DIR=uploads
+OUTPUTS_DIR=../runtime/outputs
+UPLOADS_DIR=../runtime/uploads
 MAX_PDF_SIZE_MB=50
 ENVIRONMENT=development
 SECRET_KEY=change-this-to-a-random-32-char-string-in-production
@@ -92,6 +92,8 @@ source .venv/bin/activate
 alembic upgrade head
 uvicorn main:app --reload --port 8000
 ```
+
+The local upload/report directories are intentionally outside `backend/` so Uvicorn's file watcher does not restart the server during long review jobs.
 
 If `.venv` does not exist yet:
 
