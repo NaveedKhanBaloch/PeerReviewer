@@ -51,6 +51,22 @@ def _ensure_sqlite_compatibility(sync_conn) -> None:
         if column_name not in existing_columns:
             sync_conn.execute(text(statement))
 
+    sync_conn.execute(
+        text(
+            """
+            UPDATE reviews
+            SET recommendation = CASE recommendation
+                WHEN 'accept' THEN 'Accept'
+                WHEN 'minor_revision' THEN 'Minor revision'
+                WHEN 'major_revision' THEN 'Major revision'
+                WHEN 'reject' THEN 'Reject'
+                ELSE recommendation
+            END
+            WHERE recommendation IN ('accept', 'minor_revision', 'major_revision', 'reject')
+            """
+        )
+    )
+
 
 async def _seed_default_admin() -> None:
     """Create or migrate the default local admin account."""
