@@ -12,8 +12,8 @@ export interface User {
   email: string;
   username: string;
   full_name: string | null;
-  role: 'admin' | 'user';
   is_active: boolean;
+  is_email_verified: boolean;
   organisation: string | null;
   avatar_url: string | null;
   created_at: string;
@@ -34,39 +34,24 @@ export interface TokenResponse {
   user: User;
 }
 
+export interface SignupResponse {
+  message: string;
+  email: string;
+  verification_url?: string | null;
+}
+
 export interface UserCreate {
   email: string;
   username: string;
   full_name?: string | null;
   password: string;
   organisation?: string | null;
-  role?: 'admin' | 'user';
 }
 
 export interface UserUpdate {
   full_name?: string | null;
   organisation?: string | null;
   avatar_url?: string | null;
-}
-
-export interface UserListItem {
-  id: string;
-  email: string;
-  username: string;
-  full_name: string | null;
-  role: 'admin' | 'user';
-  is_active: boolean;
-  organisation: string | null;
-  created_at: string;
-  last_login: string | null;
-  total_reviews: number;
-}
-
-export interface AdminStats {
-  total_users: number;
-  active_users: number;
-  total_reviews: number;
-  reviews_this_month: number;
 }
 
 export interface DimensionScore {

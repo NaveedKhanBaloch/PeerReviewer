@@ -17,7 +17,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_optional_user
+from api.deps import get_current_user
+from services.auth_service import decode_access_token
 from agent.graph import review_graph
 from core.config import settings
 from core.database import AsyncSessionLocal, get_db
@@ -56,18 +57,9 @@ STEP_MAPPING = [
 ]
 
 
-def _is_admin(user: Optional[User]) -> bool:
-    """Return whether the current user has admin access."""
-    return bool(user and getattr(user.role, "value", user.role) == "admin")
-
-
-def _can_access_review(review: Review, current_user: Optional[User]) -> bool:
+def _can_access_review(review: Review, current_user: User) -> bool:
     """Return whether the current user may access the review."""
-    if _is_admin(current_user):
-        return True
-    if review.created_by_user_id is None:
-        return current_user is None
-    return bool(current_user and review.created_by_user_id == current_user.id)
+    return review.created_by_user_id == current_user.id
 
 
 def _utcnow() -> datetime:
@@ -307,7 +299,7 @@ async def start_review(
     request: Request,
     file: Optional[UploadFile] = File(default=None),
     arxiv_url: Optional[str] = Form(default=None),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """Start a new review from a PDF upload or arXiv URL."""
@@ -340,7 +332,7 @@ async def start_review(
         title=title,
         source=source,
         arxiv_id=arxiv_id,
-        created_by_user_id=current_user.id if current_user else None,
+        created_by_user_id=current_user.id,
         status=ReviewStatus.pending,
     )
     db.add(review)
@@ -352,8 +344,17 @@ async def start_review(
 
 
 @router.get("/progress/{review_id}")
-async def stream_progress(review_id: str) -> StreamingResponse:
+async def stream_progress(review_id: str, token: str, db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Stream review progress events via server-sent events."""
+    payload = decode_access_token(token)
+    current_user = await db.get(User, payload["sub"])
+    if current_user is None or not current_user.is_active or not current_user.is_email_verified:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    review = await db.get(Review, review_id)
+    if review is None or review.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Review not found.")
+    if not _can_access_review(review, current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this review.")
 
     async def event_generator():
         start = time.monotonic()
@@ -403,18 +404,11 @@ async def list_reviews(
     limit: int = 50,
     offset: int = 0,
     mine: bool = False,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[ReviewListItem]:
     """Return recent non-deleted reviews for the sidebar."""
-    filters = [Review.deleted_at.is_(None)]
-    if _is_admin(current_user):
-        if mine:
-            filters.append(Review.created_by_user_id == current_user.id)
-    elif current_user is not None:
-        filters.append(Review.created_by_user_id == current_user.id)
-    else:
-        filters.append(Review.created_by_user_id.is_(None))
+    filters = [Review.deleted_at.is_(None), Review.created_by_user_id == current_user.id]
     result = await db.execute(
         select(Review)
         .where(*filters)
@@ -439,7 +433,7 @@ async def list_reviews(
 @router.get("/review/{review_id}", response_model=FullReviewOut)
 async def get_review(
     review_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FullReviewOut:
     """Return a full review payload by id."""
@@ -503,7 +497,7 @@ async def get_review(
 @router.get("/review/{review_id}/pdf")
 async def download_pdf(
     review_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """Download the generated review PDF."""
@@ -529,7 +523,7 @@ async def download_pdf(
 @router.delete("/review/{review_id}")
 async def delete_review(
     review_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """Soft-delete a review."""

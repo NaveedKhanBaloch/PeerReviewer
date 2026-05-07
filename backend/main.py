@@ -11,16 +11,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, select
 from sqlalchemy import inspect, text
 
-from api.routes.admin import router as admin_router
 from api.routes.auth import router as auth_router
 from api.routes.reviews import router
 from core.config import settings
-from core.database import AsyncSessionLocal, Base, engine
-from models.database import User, UserRole
-from services.auth_service import hash_password
+from core.database import Base, engine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,45 +63,16 @@ def _ensure_sqlite_compatibility(sync_conn) -> None:
         )
     )
 
-
-async def _seed_default_admin() -> None:
-    """Create or migrate the default local admin account."""
-    async with AsyncSessionLocal() as session:
-        simple_admin_email = "admin@login.com"
-        simple_admin_password = "admin"
-
-        existing_simple_admin = (
-            await session.execute(select(User).where(User.email == simple_admin_email))
-        ).scalar_one_or_none()
-        if existing_simple_admin is not None:
-            return
-
-        legacy_admin = (
-            await session.execute(select(User).where(User.username == "admin"))
-        ).scalar_one_or_none()
-        if legacy_admin is not None:
-            legacy_admin.email = simple_admin_email
-            legacy_admin.hashed_password = hash_password(simple_admin_password)
-            legacy_admin.role = UserRole.admin
-            legacy_admin.is_active = True
-            if not legacy_admin.full_name:
-                legacy_admin.full_name = "Default Admin"
-            await session.commit()
-            return
-
-        total = int((await session.execute(select(func.count()).select_from(User))).scalar_one())
-        if total > 0:
-            return
-        session.add(
-            User(
-                email=simple_admin_email,
-                username="admin",
-                full_name="Default Admin",
-                hashed_password=hash_password(simple_admin_password),
-                role=UserRole.admin,
-            )
-        )
-        await session.commit()
+    if "users" in inspector.get_table_names():
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        user_compatibility_columns = {
+            "is_email_verified": "ALTER TABLE users ADD COLUMN is_email_verified BOOLEAN NOT NULL DEFAULT 1",
+            "email_verification_token": "ALTER TABLE users ADD COLUMN email_verification_token VARCHAR(128)",
+            "email_verification_sent_at": "ALTER TABLE users ADD COLUMN email_verification_sent_at DATETIME",
+        }
+        for column_name, statement in user_compatibility_columns.items():
+            if column_name not in user_columns:
+                sync_conn.execute(text(statement))
 
 
 @asynccontextmanager
@@ -114,7 +81,6 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_sqlite_compatibility)
-    await _seed_default_admin()
     Path(settings.OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
     Path(settings.UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
     yield
@@ -162,7 +128,6 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(router, prefix="/api")
 app.mount("/outputs", StaticFiles(directory=settings.OUTPUTS_DIR), name="outputs")
 

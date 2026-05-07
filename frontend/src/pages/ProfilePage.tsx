@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { BarChart3, Building2, CalendarDays, Eye, EyeOff, Mail, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
@@ -45,22 +45,24 @@ export function ProfilePage() {
   const canChange = passwords.current && passwords.next === passwords.confirm && score >= 3;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
       <ErrorBoundary>
-        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="flex items-start gap-5">
+        <section className="rounded-lg border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             {user.avatar_url ? (
               <img src={user.avatar_url} alt="" className="h-20 w-20 rounded-full object-cover" />
             ) : (
               <div className={`flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white ${colorFor(user.username)}`}>{initials}</div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-slate-900">{user.full_name || user.username}</h1>
-                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{user.role}</span>
-              </div>
+              <h1 className="text-2xl font-bold text-slate-900">{user.full_name || user.username}</h1>
               <p className="text-slate-500">@{user.username}</p>
-              <p className="mt-2 text-sm text-slate-500">{user.organisation || 'Organisation not set'} · {user.email}</p>
+              <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-blue-500" /> {user.email}</div>
+                <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-blue-500" /> {user.organisation || 'Organisation not set'}</div>
+                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-blue-500" /> Member since {new Date(user.created_at).toLocaleDateString()}</div>
+                <div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-500" /> {counts.total} manuscript reviews</div>
+              </div>
             </div>
             <button type="button" onClick={() => setEditing(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Edit Profile
@@ -72,7 +74,7 @@ export function ProfilePage() {
       {editing ? (
         <ErrorBoundary>
           <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <h2 className="font-semibold text-slate-900">Edit Profile</h2>
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900"><UserRound className="h-4 w-4 text-blue-500" /> Edit Profile</h2>
             <div className="mt-4 space-y-3">
               <input value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} placeholder="Full name" className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-blue-500" />
               <input value={profile.organisation} onChange={(event) => setProfile({ ...profile, organisation: event.target.value })} placeholder="Organisation" className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-blue-500" />
@@ -126,7 +128,7 @@ export function ProfilePage() {
 
       <ErrorBoundary>
         <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <h2 className="font-semibold text-slate-900">Review Statistics</h2>
+          <h2 className="font-semibold text-slate-900">Manuscript Review Statistics</h2>
           {reviewsQuery.isLoading ? <LoadingSkeleton /> : (
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>Total papers reviewed: <strong>{counts.total}</strong></div>

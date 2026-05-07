@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from models.database import User, UserRole
+from models.database import User
 from services.auth_service import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -26,14 +26,9 @@ async def get_current_user(
     user = await db.get(User, payload["sub"])
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive or not found.")
+    if not user.is_email_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email verification required.")
     return user
-
-
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require an active admin user."""
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return current_user
 
 
 async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
@@ -48,4 +43,6 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)
     user = await db.get(User, payload["sub"])
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive or not found.")
+    if not user.is_email_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email verification required.")
     return user

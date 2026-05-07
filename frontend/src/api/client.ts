@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 import { toErrorMessage } from './errorMessage';
 import { useAuthStore } from '../stores/authStore';
-import type { AdminStats, FullReview, ReviewListItem, TokenResponse, User, UserCreate, UserListItem, UserUpdate } from '../types';
+import type { FullReview, ReviewListItem, SignupResponse, TokenResponse, User, UserCreate, UserUpdate } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -104,6 +104,18 @@ export const api = {
       const res = await apiClient.post('/api/auth/login', { identifier, password });
       return res.data;
     },
+    signup: async (data: UserCreate): Promise<SignupResponse> => {
+      const res = await apiClient.post('/api/auth/signup', data);
+      return res.data;
+    },
+    verifyEmail: async (token: string): Promise<{ message: string }> => {
+      const res = await apiClient.get('/api/auth/verify-email', { params: { token } });
+      return res.data;
+    },
+    google: async (credential: string): Promise<TokenResponse> => {
+      const res = await apiClient.post('/api/auth/google', { credential });
+      return res.data;
+    },
     refresh: async (refreshToken: string): Promise<TokenResponse> => {
       const res = await apiClient.post('/api/auth/refresh', { refresh_token: refreshToken });
       return res.data;
@@ -124,31 +136,6 @@ export const api = {
     },
     changePassword: async (current: string, newPass: string): Promise<void> => {
       await apiClient.put('/api/auth/me/password', { current_password: current, new_password: newPass });
-    },
-  },
-
-  admin: {
-    getUsers: async (page = 0): Promise<{ users: UserListItem[]; total: number }> => {
-      const res = await apiClient.get('/api/admin/users', { params: { offset: page * 50, limit: 50 } });
-      return res.data;
-    },
-    createUser: async (data: UserCreate): Promise<User> => {
-      const res = await apiClient.post('/api/admin/users', data);
-      return res.data;
-    },
-    updateUser: async (id: string, data: Partial<UserUpdate & { role: string; is_active: boolean }>): Promise<User> => {
-      const res = await apiClient.put(`/api/admin/users/${id}`, data);
-      return res.data;
-    },
-    resetPassword: async (id: string, newPassword: string): Promise<void> => {
-      await apiClient.post(`/api/admin/users/${id}/reset-password`, { new_password: newPassword });
-    },
-    deactivateUser: async (id: string): Promise<void> => {
-      await apiClient.delete(`/api/admin/users/${id}`);
-    },
-    getStats: async (): Promise<AdminStats> => {
-      const res = await apiClient.get('/api/admin/stats');
-      return res.data;
     },
   },
 };

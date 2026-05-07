@@ -109,7 +109,7 @@ export function UploadZone() {
           className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-          Review
+          Submit manuscript
         </button>
       </div>
 

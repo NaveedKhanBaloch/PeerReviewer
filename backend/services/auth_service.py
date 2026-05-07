@@ -37,10 +37,10 @@ def _create_token(payload: dict, expires_delta: timedelta) -> str:
     return jwt.encode(data, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_access_token(user_id: str, role: str) -> str:
+def create_access_token(user_id: str) -> str:
     """Create a short-lived access token."""
     return _create_token(
-        {"sub": user_id, "role": role, "type": "access"},
+        {"sub": user_id, "type": "access"},
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 

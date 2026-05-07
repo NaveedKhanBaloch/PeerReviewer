@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useReviewStore } from '../stores/reviewStore';
+import { useAuthStore } from '../stores/authStore';
 import type { ProgressEvent } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -7,14 +8,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export function useSSE(reviewId: string | null) {
   const esRef = useRef<EventSource | null>(null);
   const { updateProgress, completeProcessing, failProcessing, updateReview } = useReviewStore();
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   useEffect(() => {
-    if (!reviewId) {
+    if (!reviewId || !accessToken) {
       return;
     }
 
     esRef.current?.close();
-    const es = new EventSource(`${API_URL}/api/progress/${reviewId}`);
+    const es = new EventSource(`${API_URL}/api/progress/${reviewId}?token=${encodeURIComponent(accessToken)}`);
     esRef.current = es;
 
     es.onmessage = (event) => {
@@ -40,5 +42,5 @@ export function useSSE(reviewId: string | null) {
     return () => {
       es.close();
     };
-  }, [reviewId, updateProgress, completeProcessing, failProcessing, updateReview]);
+  }, [reviewId, accessToken, updateProgress, completeProcessing, failProcessing, updateReview]);
 }

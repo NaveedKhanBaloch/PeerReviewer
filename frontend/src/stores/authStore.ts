@@ -8,7 +8,6 @@ interface AuthStore {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
-  isAdmin: () => boolean;
   currentUser: () => User | null;
   login: (response: TokenResponse) => void;
   logout: () => void;
@@ -23,7 +22,6 @@ export const useAuthStore = create<AuthStore>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      isAdmin: () => get().user?.role === 'admin',
       currentUser: () => get().user,
       login: (response) =>
         set({

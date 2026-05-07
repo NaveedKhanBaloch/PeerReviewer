@@ -28,14 +28,13 @@ class ReviewRequest(BaseModel):
 
 
 class UserCreate(BaseModel):
-    """Payload for creating users."""
+    """Payload for public user signup."""
 
     email: EmailStr
     username: str
     full_name: Optional[str] = None
     password: str
     organisation: Optional[str] = None
-    role: Optional[str] = "user"
 
     @field_validator("username")
     @classmethod
@@ -56,13 +55,6 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
-class AdminUserUpdate(UserUpdate):
-    """Admin-only user update payload."""
-
-    role: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
 class UserOut(BaseModel):
     """Authenticated user response."""
 
@@ -72,27 +64,12 @@ class UserOut(BaseModel):
     email: str
     username: str
     full_name: Optional[str]
-    role: str
     is_active: bool
+    is_email_verified: bool
     organisation: Optional[str]
     avatar_url: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
-
-
-class UserListItem(BaseModel):
-    """Admin user list item."""
-
-    id: str
-    email: str
-    username: str
-    full_name: Optional[str]
-    role: str
-    is_active: bool
-    organisation: Optional[str]
-    created_at: datetime
-    last_login: Optional[datetime]
-    total_reviews: int
 
 
 class TokenResponse(BaseModel):
@@ -104,11 +81,31 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+class SignupResponse(BaseModel):
+    """Public signup response before email verification."""
+
+    message: str
+    email: EmailStr
+    verification_url: Optional[str] = None
+
+
+class EmailVerificationResponse(BaseModel):
+    """Email verification result."""
+
+    message: str
+
+
 class LoginRequest(BaseModel):
     """Email/password login request."""
 
     identifier: str = Field(validation_alias=AliasChoices("identifier", "email"))
     password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    """Google Identity Services credential request."""
+
+    credential: str
 
 
 class RefreshRequest(BaseModel):
@@ -127,33 +124,6 @@ class PasswordChange(BaseModel):
     @classmethod
     def validate_new_password(cls, value: str) -> str:
         return _validate_password(value)
-
-
-class AdminPasswordReset(BaseModel):
-    """Admin password reset request."""
-
-    new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        return _validate_password(value)
-
-
-class UsersPage(BaseModel):
-    """Paginated admin users response."""
-
-    users: List[UserListItem]
-    total: int
-
-
-class AdminStats(BaseModel):
-    """Admin dashboard statistics."""
-
-    total_users: int
-    active_users: int
-    total_reviews: int
-    reviews_this_month: int
 
 
 class DimensionScoreOut(BaseModel):
