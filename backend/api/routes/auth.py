@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import re
-import secrets
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +26,6 @@ from models.schemas import (
     UserOut,
     UserUpdate,
 )
-from services.email_service import send_verification_email
 from services.auth_service import (
     create_access_token,
     create_refresh_token,
@@ -93,12 +91,10 @@ def _token_response(user: User) -> TokenResponse:
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     payload: UserCreate,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> SignupResponse:
-    """Create a public SaaS user account and send email verification."""
+    """Create a public SaaS user account that can sign in immediately."""
     await _ensure_unique_signup(payload, db)
-    verification_token = secrets.token_urlsafe(48)
     user = User(
         email=_normalize_email(str(payload.email)),
         username=payload.username.strip(),
@@ -107,19 +103,17 @@ async def signup(
         hashed_password=hash_password(payload.password),
         role=UserRole.user,
         is_active=True,
-        is_email_verified=False,
-        email_verification_token=verification_token,
-        email_verification_sent_at=utcnow(),
+        is_email_verified=True,
+        email_verification_token=None,
+        email_verification_sent_at=None,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    verification_url = _verification_url(verification_token)
-    background_tasks.add_task(send_verification_email, user.email, user.full_name, verification_url)
     return SignupResponse(
-        message="Account created. Please verify your email before signing in.",
+        message="Account created. You can sign in now.",
         email=user.email,
-        verification_url=verification_url if settings.ENVIRONMENT == "development" else None,
+        verification_url=None,
     )
 
 
@@ -153,8 +147,6 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Your account has been deactivated.")
-    if not user.is_email_verified:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email before signing in.")
     user.last_login = utcnow()
     await db.commit()
     await db.refresh(user)
@@ -217,7 +209,7 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
     """Refresh access token using a refresh token."""
     user_id = decode_refresh_token(payload.refresh_token)
     user = await db.get(User, user_id)
-    if user is None or not user.is_active or not user.is_email_verified:
+    if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive or not found.")
     return _token_response(user)
 

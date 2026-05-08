@@ -230,13 +230,13 @@ export function ProfilePage() {
                   <div className="flex items-center gap-3">
                     <Mail className="h-5 w-5 text-slate-400" />
                     <div>
-                      <div className="text-sm font-bold text-slate-800">Email verification</div>
+                      <div className="text-sm font-bold text-slate-800">Email sign-in</div>
                       <div className="text-sm text-slate-500">{user.email}</div>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${user.is_email_verified ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                    {user.is_email_verified ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
-                    {user.is_email_verified ? 'Verified' : 'Pending'}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Enabled
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">

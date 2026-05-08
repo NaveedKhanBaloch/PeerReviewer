@@ -348,7 +348,7 @@ async def stream_progress(review_id: str, token: str, db: AsyncSession = Depends
     """Stream review progress events via server-sent events."""
     payload = decode_access_token(token)
     current_user = await db.get(User, payload["sub"])
-    if current_user is None or not current_user.is_active or not current_user.is_email_verified:
+    if current_user is None or not current_user.is_active:
         raise HTTPException(status_code=401, detail="Authentication required.")
     review = await db.get(Review, review_id)
     if review is None or review.deleted_at is not None:

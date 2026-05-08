@@ -32,6 +32,9 @@ Path(settings.UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
 
 def _ensure_sqlite_compatibility(sync_conn) -> None:
     """Patch older SQLite schemas with newly added nullable columns."""
+    if sync_conn.dialect.name != "sqlite":
+        return
+
     inspector = inspect(sync_conn)
     if "reviews" not in inspector.get_table_names():
         return

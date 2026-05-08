@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -9,7 +9,9 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build \
-    && npm install -g serve@14
+RUN npm run build
 
-CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"]
+FROM nginx:1.27-alpine
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html

@@ -46,7 +46,6 @@ export function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [devVerificationUrl, setDevVerificationUrl] = useState<string | null>(null);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const { accessToken, login, user } = useAuthStore();
   const navigate = useNavigate();
@@ -145,9 +144,8 @@ export function LoginPage() {
           full_name: fullName.trim() || null,
           organisation: organisation.trim() || null,
           password,
-        });
+      });
       setNotice(response.message);
-      setDevVerificationUrl(response.verification_url || null);
       setMode('signin');
       setIdentifier(email.trim());
       setPassword('');
@@ -221,9 +219,6 @@ export function LoginPage() {
           {notice ? (
             <div className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               {notice}
-              {devVerificationUrl ? (
-                <a href={devVerificationUrl} className="mt-2 block font-semibold text-emerald-800 underline">Open local verification link</a>
-              ) : null}
             </div>
           ) : null}
 

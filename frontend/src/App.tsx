@@ -89,18 +89,6 @@ function AppLayout() {
   const notifications = useMemo<AppNotification[]>(() => {
     const items: AppNotification[] = [];
 
-    if (user && !user.is_email_verified) {
-      items.push({
-        actionLabel: 'Open settings',
-        id: `verify-email-${user.id}`,
-        message: 'Verify your email to keep account recovery and important submission alerts reliable.',
-        route: '/app/profile',
-        time: 'Account',
-        title: 'Email verification pending',
-        type: 'warning',
-      });
-    }
-
     if (isProcessing && processingReviewId) {
       const activeReview = reviews.find((review) => review.id === processingReviewId);
       items.push({

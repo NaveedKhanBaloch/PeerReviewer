@@ -28,44 +28,6 @@ interface ReviewRow {
   source?: ReviewListItem;
 }
 
-const fallbackReviews: ReviewRow[] = [
-  {
-    id: 'demo-dashboard-1',
-    title: 'Lattice-Based Post-Quantum Cryptographic Schemes',
-    outcome: 'Major revision',
-    score: 5.7,
-    date: '3w ago',
-  },
-  {
-    id: 'demo-dashboard-2',
-    title: 'Latent Space Editing for Controllable Image Synthesis',
-    outcome: 'Minor revision',
-    score: 7.4,
-    date: '3w ago',
-  },
-  {
-    id: 'demo-dashboard-3',
-    title: 'Geometric Deep Learning on Protein Folding Trajectories',
-    outcome: 'Accept',
-    score: 8.3,
-    date: '3w ago',
-  },
-  {
-    id: 'demo-dashboard-4',
-    title: 'Diffusion Models for Synthetic Tabular Data Generation',
-    outcome: 'Reject',
-    score: 3.6,
-    date: '3w ago',
-  },
-  {
-    id: 'demo-dashboard-5',
-    title: 'Sim-to-Real Adaptation for Surgical Robotics',
-    outcome: 'Minor revision',
-    score: 7.3,
-    date: 'Mar 15',
-  },
-];
-
 function recommendationToOutcome(review: ReviewListItem): Outcome {
   if (review.recommendation === 'Accept') return 'Accept';
   if (review.recommendation === 'Minor revision') return 'Minor revision';
@@ -96,8 +58,6 @@ function relativeDate(value: string) {
 
 function toDashboardRows(reviews: ReviewListItem[]) {
   const completeReviews = reviews.filter((review) => review.status === 'complete');
-  if (!completeReviews.length) return fallbackReviews;
-
   return completeReviews.slice(0, 5).map((review) => ({
     id: review.id,
     title: review.title,
@@ -106,6 +66,66 @@ function toDashboardRows(reviews: ReviewListItem[]) {
     date: relativeDate(review.created_at),
     source: review,
   }));
+}
+
+function withinRange(value: string, start: Date, end: Date) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date >= start && date < end;
+}
+
+function countInLastDays(reviews: ReviewListItem[], days: number) {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(end.getDate() - days);
+  return reviews.filter((review) => withinRange(review.created_at, start, end)).length;
+}
+
+function countInPreviousDays(reviews: ReviewListItem[], days: number) {
+  const end = new Date();
+  end.setDate(end.getDate() - days);
+  const start = new Date(end);
+  start.setDate(end.getDate() - days);
+  return reviews.filter((review) => withinRange(review.created_at, start, end)).length;
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  return {
+    start: new Date(now.getFullYear(), now.getMonth(), 1),
+    end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+  };
+}
+
+function previousMonthRange() {
+  const now = new Date();
+  return {
+    start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+    end: new Date(now.getFullYear(), now.getMonth(), 1),
+  };
+}
+
+function averageScore(reviews: ReviewListItem[]) {
+  const scored = reviews.filter((review) => review.overall_score !== null);
+  if (!scored.length) return null;
+  return scored.reduce((sum, review) => sum + (review.overall_score ?? 0), 0) / scored.length;
+}
+
+function acceptanceRate(reviews: ReviewListItem[]) {
+  if (!reviews.length) return null;
+  return Math.round((reviews.filter((review) => review.recommendation === 'Accept').length / reviews.length) * 100);
+}
+
+function trendLabel(delta: number | null, suffix = '') {
+  if (delta === null) return 'n/a';
+  if (delta === 0) return `0${suffix}`;
+  const formatted = Number.isInteger(delta) ? String(Math.abs(delta)) : Math.abs(delta).toFixed(1);
+  return `${delta > 0 ? '↗' : '↘'} ${formatted}${suffix}`;
+}
+
+function trendClass(delta: number | null) {
+  if (delta === null || delta === 0) return 'bg-slate-50 text-slate-500';
+  return delta > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
 }
 
 function badgeClass(outcome: Outcome) {
@@ -127,15 +147,15 @@ function StatCard({
   Icon,
   iconClass,
   label,
-  trend,
-  trendClass,
+  trendClassName,
+  trendText,
   value,
 }: {
   Icon: LucideIcon;
   iconClass: string;
   label: string;
-  trend: string;
-  trendClass: string;
+  trendText: string;
+  trendClassName: string;
   value: string;
 }) {
   return (
@@ -144,9 +164,9 @@ function StatCard({
         <span className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${iconClass}`}>
           <Icon className="h-5 w-5" />
         </span>
-        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-bold ${trendClass}`}>
-          {trend.startsWith('↘') ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
-          {trend.replace(/[↘↗]\s?/, '')}
+        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-bold ${trendClassName}`}>
+          {trendText.startsWith('↘') ? <TrendingDown className="h-3.5 w-3.5" /> : trendText.startsWith('↗') ? <TrendingUp className="h-3.5 w-3.5" /> : null}
+          {trendText.replace(/[↘↗]\s?/, '')}
         </span>
       </div>
       <div className="mt-7 text-sm font-bold uppercase tracking-wide text-slate-500">{label}</div>
@@ -195,21 +215,34 @@ export function DashboardPage() {
   const activeProcessingReview = processingReviewId
     ? reviews.find((review) => review.id === processingReviewId) || processingItems[0]
     : processingItems[0];
-  const totalReviews = reviews.length || 47;
   const completeReviews = reviews.filter((review) => review.status === 'complete');
-  const acceptanceRate = completeReviews.length
-    ? Math.round((completeReviews.filter((review) => review.recommendation === 'Accept').length / completeReviews.length) * 100)
-    : 23;
-  const averageScore = completeReviews.length
-    ? (completeReviews.reduce((sum, review) => sum + (review.overall_score ?? 0), 0) / completeReviews.length).toFixed(1)
-    : '6.7';
-  const thisMonth = reviews.filter((review) => {
-    const created = new Date(review.created_at);
-    const now = new Date();
-    return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-  }).length || 3;
+  const currentMonth = currentMonthRange();
+  const priorMonth = previousMonthRange();
+  const totalReviews = reviews.length;
+  const current30Total = countInLastDays(reviews, 30);
+  const prior30Total = countInPreviousDays(reviews, 30);
+  const allTimeAcceptanceRate = acceptanceRate(completeReviews);
+  const current30Complete = completeReviews.filter((review) => isWithinDays(review.created_at, 30));
+  const prior30Complete = completeReviews.filter((review) => {
+    const end = new Date();
+    end.setDate(end.getDate() - 30);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 30);
+    return withinRange(review.created_at, start, end);
+  });
+  const current30AcceptanceRate = acceptanceRate(current30Complete);
+  const prior30AcceptanceRate = acceptanceRate(prior30Complete);
+  const allTimeAverageScore = averageScore(completeReviews);
+  const current30AverageScore = averageScore(current30Complete);
+  const prior30AverageScore = averageScore(prior30Complete);
+  const thisMonth = reviews.filter((review) => withinRange(review.created_at, currentMonth.start, currentMonth.end)).length;
+  const previousMonthTotal = reviews.filter((review) => withinRange(review.created_at, priorMonth.start, priorMonth.end)).length;
   const firstName = (user?.full_name || user?.username || 'Aria').split(/\s+/)[0];
   const lastCompleted = dashboardRows[0];
+  const totalTrend = current30Total - prior30Total;
+  const acceptanceTrend = current30AcceptanceRate !== null && prior30AcceptanceRate !== null ? current30AcceptanceRate - prior30AcceptanceRate : null;
+  const averageTrend = current30AverageScore !== null && prior30AverageScore !== null ? current30AverageScore - prior30AverageScore : null;
+  const thisMonthTrend = thisMonth - previousMonthTotal;
   const outcomeRows = useMemo(() => {
     const colors: Record<Outcome, string> = {
       Accept: '#16a34a',
@@ -323,28 +356,36 @@ export function DashboardPage() {
             </span>
             <div>
               <h2 className="text-xl font-bold text-slate-950">Last Completed</h2>
-              <p className="mt-1 text-base font-medium text-slate-500">{lastCompleted.date}</p>
+              <p className="mt-1 text-base font-medium text-slate-500">{lastCompleted ? lastCompleted.date : 'No completed reviews yet'}</p>
             </div>
           </div>
-          <h3 className="mt-7 line-clamp-2 text-lg font-bold leading-7 text-slate-700">{lastCompleted.title}</h3>
-          <div className="mt-4 flex items-center gap-2">
-            <span className={`rounded-lg border px-2.5 py-1 text-sm font-bold ${badgeClass(lastCompleted.outcome)}`}>
-              {lastCompleted.outcome}
-            </span>
-            <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${scoreClass(lastCompleted.score)}`}>{lastCompleted.score.toFixed(1)}</span>
-          </div>
-          <button type="button" onClick={() => openReview(lastCompleted)} className="mt-6 inline-flex items-center gap-2 text-base font-bold text-blue-700">
-            View report
-            <ArrowRight className="h-4 w-4" />
-          </button>
+          {lastCompleted ? (
+            <>
+              <h3 className="mt-7 line-clamp-2 text-lg font-bold leading-7 text-slate-700">{lastCompleted.title}</h3>
+              <div className="mt-4 flex items-center gap-2">
+                <span className={`rounded-lg border px-2.5 py-1 text-sm font-bold ${badgeClass(lastCompleted.outcome)}`}>
+                  {lastCompleted.outcome}
+                </span>
+                <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${scoreClass(lastCompleted.score)}`}>{lastCompleted.score.toFixed(1)}</span>
+              </div>
+              <button type="button" onClick={() => openReview(lastCompleted)} className="mt-6 inline-flex items-center gap-2 text-base font-bold text-blue-700">
+                View report
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <div className="mt-7 rounded-lg bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">
+              Completed review reports will appear here after your first manuscript review finishes.
+            </div>
+          )}
         </div>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
-        <StatCard Icon={FileText} iconClass="bg-blue-50 text-blue-700" label="Total Reviews" trend="↘ 25" trendClass="bg-rose-50 text-rose-600" value={String(totalReviews)} />
-        <StatCard Icon={TrendingUp} iconClass="bg-emerald-50 text-emerald-600" label="Acceptance Rate" trend="↘ 1.6pp" trendClass="bg-rose-50 text-rose-600" value={String(acceptanceRate)} />
-        <StatCard Icon={Star} iconClass="bg-amber-50 text-amber-600" label="Average Score" trend="↗ 1.2" trendClass="bg-emerald-50 text-emerald-600" value={averageScore} />
-        <StatCard Icon={CalendarDays} iconClass="bg-violet-50 text-violet-600" label="This Month" trend="↘ 1" trendClass="bg-rose-50 text-rose-600" value={String(thisMonth)} />
+        <StatCard Icon={FileText} iconClass="bg-blue-50 text-blue-700" label="Total Reviews" trendText={trendLabel(totalTrend)} trendClassName={trendClass(totalTrend)} value={String(totalReviews)} />
+        <StatCard Icon={TrendingUp} iconClass="bg-emerald-50 text-emerald-600" label="Acceptance Rate" trendText={trendLabel(acceptanceTrend, 'pp')} trendClassName={trendClass(acceptanceTrend)} value={String(allTimeAcceptanceRate ?? 0)} />
+        <StatCard Icon={Star} iconClass="bg-amber-50 text-amber-600" label="Average Score" trendText={trendLabel(averageTrend)} trendClassName={trendClass(averageTrend)} value={allTimeAverageScore === null ? '0.0' : allTimeAverageScore.toFixed(1)} />
+        <StatCard Icon={CalendarDays} iconClass="bg-violet-50 text-violet-600" label="This Month" trendText={trendLabel(thisMonthTrend)} trendClassName={trendClass(thisMonthTrend)} value={String(thisMonth)} />
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
@@ -393,7 +434,7 @@ export function DashboardPage() {
             </button>
           </div>
           <div className="divide-y divide-slate-100">
-            {dashboardRows.map((row) => (
+            {dashboardRows.length ? dashboardRows.map((row) => (
               <button
                 key={row.id}
                 type="button"
@@ -409,7 +450,11 @@ export function DashboardPage() {
                 </div>
                 <span className="text-sm font-medium text-slate-400 sm:pt-8">{row.date}</span>
               </button>
-            ))}
+            )) : (
+              <div className="rounded-lg bg-slate-50 px-4 py-8 text-center text-sm font-semibold text-slate-500">
+                No completed reviews yet. Submit a manuscript to populate this list.
+              </div>
+            )}
           </div>
         </div>
       </section>

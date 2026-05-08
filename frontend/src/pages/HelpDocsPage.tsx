@@ -78,7 +78,7 @@ const troubleshooting = [
   ['Review is stuck', 'Return to Dashboard and open Current Manuscript. If the review has not moved for several minutes, refresh once and check whether the backend worker is running.'],
   ['Report is missing', 'Reports become available after review status is complete. If the status is failed, submit the manuscript again or contact support with the submission title.'],
   ['PDF extraction looks weak', 'Use a clean manuscript PDF with selectable text, clear section headings, and embedded references. OCR scanned documents before uploading.'],
-  ['Login or verification issue', 'Check email verification status in Settings. If tokens expire, sign in again and request a fresh verification link if available.'],
+  ['Login issue', 'Sign in with either your email or username and password. If your session expires, sign in again from the login page.'],
 ];
 
 const faqs = [
