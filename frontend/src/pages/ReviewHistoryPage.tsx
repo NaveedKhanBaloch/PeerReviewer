@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -118,10 +117,16 @@ function authorLines(authors: string) {
 export function ReviewHistoryPage() {
   const { reviews, setSelectedReview } = useReviewStore();
   const navigate = useNavigate();
+  const pageSize = 5;
 
   const rows = useMemo(() => {
     return toRows(reviews);
   }, [reviews]);
+  const visibleRows = rows.slice(0, pageSize);
+  const totalRows = rows.length;
+  const totalPages = Math.ceil(totalRows / pageSize);
+  const showingStart = totalRows ? 1 : 0;
+  const showingEnd = Math.min(pageSize, totalRows);
 
   const openReview = (row: HistoryRow) => {
     if (!row.sourceReview) return;
@@ -173,7 +178,7 @@ export function ReviewHistoryPage() {
         </div>
 
         <div>
-          {rows.length ? rows.slice(0, 5).map((row) => (
+          {visibleRows.length ? visibleRows.map((row) => (
             <article
               key={row.id}
               className="grid gap-4 border-b border-slate-200 px-5 py-5 last:border-b-0 md:grid-cols-[38px_1.55fr_0.62fr_0.7fr_0.52fr_0.78fr_0.38fr] md:items-center md:gap-6"
@@ -235,26 +240,29 @@ export function ReviewHistoryPage() {
         </div>
 
         <div className="flex flex-col gap-4 border-t border-slate-200 px-7 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-slate-500">Showing 1 - 5 of {reviews.length || 124} results</div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className="flex h-10 items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
-              10 / Page
-              <ChevronDown className="h-4 w-4" />
-            </button>
+          <div className="text-sm font-semibold text-slate-500">
+            Showing {showingStart} - {showingEnd} of {totalRows} {totalRows === 1 ? 'result' : 'results'}
+          </div>
+          {totalPages > 1 ? (
             <div className="flex items-center gap-2">
               <button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-400">
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button type="button" className="h-10 w-10 rounded-lg bg-[#0478bf] text-sm font-bold text-white">1</button>
-              <button type="button" className="h-10 w-10 rounded-lg border border-slate-200 text-sm font-bold text-slate-700">2</button>
-              <button type="button" className="h-10 w-10 rounded-lg border border-slate-200 text-sm font-bold text-slate-700">3</button>
-              <span className="px-1 text-slate-500">...</span>
-              <button type="button" className="h-10 w-10 rounded-lg border border-slate-200 text-sm font-bold text-slate-700">12</button>
+              {Array.from({ length: Math.min(totalPages - 1, 2) }, (_, index) => index + 2).map((page) => (
+                <button key={page} type="button" className="h-10 w-10 rounded-lg border border-slate-200 text-sm font-bold text-slate-700">{page}</button>
+              ))}
+              {totalPages > 3 ? (
+                <>
+                  <span className="px-1 text-slate-500">...</span>
+                  <button type="button" className="h-10 w-10 rounded-lg border border-slate-200 text-sm font-bold text-slate-700">{totalPages}</button>
+                </>
+              ) : null}
               <button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500">
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
     </div>

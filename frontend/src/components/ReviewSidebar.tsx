@@ -18,6 +18,7 @@ const navItems = [
   { label: 'Dashboard', path: '/app/dashboard', Icon: LayoutDashboard },
   { label: 'Analytics', path: '/app/analytics', Icon: BarChart3 },
   { label: 'Submissions', path: '/app', Icon: Inbox },
+  { label: 'Settings', path: '/app/profile', Icon: Settings },
 ];
 
 function displayName(user: ReturnType<typeof useAuthStore.getState>['user']) {
@@ -103,7 +104,7 @@ export function ReviewSidebar() {
 
       <div className="px-5 pb-5">
         <div className="mb-5 border-b border-white/7 pb-5">
-          <button type="button" onClick={() => navigate('/profile')} className="flex w-full items-center gap-4 rounded-lg text-left">
+          <button type="button" onClick={() => navigate('/app/profile')} className="flex w-full items-center gap-4 rounded-lg text-left">
             {user?.avatar_url ? (
               <img src={user.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
             ) : (
@@ -118,13 +119,9 @@ export function ReviewSidebar() {
           </button>
         </div>
         <div className="space-y-2">
-          <button type="button" className="flex h-12 w-full items-center gap-4 rounded-lg px-4 text-left text-base font-bold text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
+          <button type="button" onClick={() => navigate('/app/help')} className="flex h-12 w-full items-center gap-4 rounded-lg px-4 text-left text-base font-bold text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
             <HelpCircle className="h-5 w-5" />
             Help &amp; docs
-          </button>
-          <button type="button" onClick={() => navigate('/profile')} className="flex h-12 w-full items-center gap-4 rounded-lg px-4 text-left text-base font-bold text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
-            <Settings className="h-5 w-5" />
-            Settings
           </button>
         </div>
       </div>
