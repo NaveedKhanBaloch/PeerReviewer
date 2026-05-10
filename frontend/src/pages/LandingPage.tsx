@@ -345,6 +345,12 @@ export function LandingPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
+            <Link to="/terms" className="transition hover:text-white">
+              Terms of Service
+            </Link>
+            <Link to="/privacy" className="transition hover:text-white">
+              Privacy Policy
+            </Link>
             <a href="https://publicationethics.org/resources/guidelines/cope-ethical-guidelines-peer-reviewers" className="transition hover:text-white" rel="noreferrer" target="_blank">
               COPE peer-review ethics
             </a>

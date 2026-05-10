@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AlertCircle, Bell, CheckCircle2, ChevronDown, FilePlus2, LoaderCircle, Mail, X } from 'lucide-react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { AnalyticsPage } from './pages/AnalyticsPage';
@@ -15,8 +15,10 @@ import { useSSE } from './hooks/useSSE';
 import { HelpDocsPage } from './pages/HelpDocsPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReviewHistoryPage } from './pages/ReviewHistoryPage';
+import { TermsPage } from './pages/TermsPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { useAuthStore } from './stores/authStore';
 import { useReviewStore } from './stores/reviewStore';
@@ -284,11 +286,10 @@ function AppLayout() {
         </ErrorBoundary>
         {!isDashboardRoute && !isAnalyticsRoute && !isProfileRoute && !isHelpRoute ? (
           <footer className="flex min-h-[62px] flex-col gap-3 border-t border-slate-200 bg-white px-10 py-4 text-sm font-semibold text-slate-500 lg:flex-row lg:items-center lg:justify-between">
-            <div>© 2024 AI Research Paper Reviewer. All rights reserved.</div>
+            <div>© 2026 AI Research Paper Reviewer. All rights reserved.</div>
             <div className="flex flex-wrap gap-8">
-              <span>System Status: Operational</span>
-              <a href="/terms" className="hover:text-slate-900">Terms of Service</a>
-              <a href="/privacy" className="hover:text-slate-900">Privacy Policy</a>
+              <Link to="/terms" className="hover:text-slate-900">Terms of Service</Link>
+              <Link to="/privacy" className="hover:text-slate-900">Privacy Policy</Link>
             </div>
           </footer>
         ) : null}
@@ -326,6 +327,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/app/*" element={<ProtectedRoute redirect="/app"><AppLayout /></ProtectedRoute>} />
           <Route path="/profile" element={<Navigate to="/app/profile" replace />} />

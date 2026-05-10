@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { api } from '../api/client';
 import { useReviewStore } from '../stores/reviewStore';
 import { useAuthStore } from '../stores/authStore';
 import type { ProgressEvent } from '../types';
@@ -19,13 +20,24 @@ export function useSSE(reviewId: string | null) {
     const es = new EventSource(`${API_URL}/api/progress/${reviewId}?token=${encodeURIComponent(accessToken)}`);
     esRef.current = es;
 
-    es.onmessage = (event) => {
+    es.onmessage = async (event) => {
       const data: ProgressEvent = JSON.parse(event.data);
       updateProgress(data);
 
       if (data.status === 'complete') {
+        try {
+          const review = await api.getReview(reviewId);
+          updateReview(reviewId, {
+            title: review.title,
+            created_at: review.created_at,
+            status: 'complete',
+            recommendation: review.recommendation,
+            overall_score: review.overall_score,
+          });
+        } catch {
+          updateReview(reviewId, { status: 'complete' });
+        }
         completeProcessing(reviewId);
-        updateReview(reviewId, { status: 'complete' });
         es.close();
       } else if (data.status === 'failed') {
         failProcessing(data.message);

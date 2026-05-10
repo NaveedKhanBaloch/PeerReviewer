@@ -3,7 +3,7 @@ export interface ReviewListItem {
   title: string;
   created_at: string;
   status: 'pending' | 'processing' | 'complete' | 'failed';
-  recommendation: 'Accept' | 'Minor revision' | 'Major revision' | 'Reject' | null;
+  recommendation: string | null;
   overall_score: number | null;
 }
 

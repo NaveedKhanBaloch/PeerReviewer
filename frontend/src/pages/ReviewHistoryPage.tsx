@@ -20,7 +20,7 @@ interface HistoryRow {
   authors: string;
   submittedDate: string;
   submittedTime: string;
-  score: number;
+  score: number | null;
   outcome: string;
   sourceReview?: ReviewListItem;
 }
@@ -56,7 +56,7 @@ function toRows(reviews: ReviewListItem[]): HistoryRow[] {
       authors: index % 2 === 0 ? 'Research Team' : 'Submitted Author',
       submittedDate: submitted.date,
       submittedTime: submitted.time,
-      score: review.overall_score ?? 0,
+      score: review.overall_score,
       outcome: recommendationToOutcome(review),
       sourceReview: review,
     };
@@ -70,10 +70,10 @@ function scoreColor(score: number) {
   return '#f43f5e';
 }
 
-function ScoreRing({ score }: { score: number }) {
+function ScoreRing({ score }: { score: number | null }) {
   const radius = 22;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(10, score));
+  const clamped = score === null ? 0 : Math.max(0, Math.min(10, score));
   const dash = (clamped / 10) * circumference;
   const color = scoreColor(clamped);
 
@@ -94,7 +94,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center text-[22px] font-bold text-slate-950">
-        {clamped.toFixed(1)}
+        {score === null ? <span className="text-sm text-slate-500">N/A</span> : clamped.toFixed(1)}
       </div>
     </div>
   );
@@ -151,13 +151,6 @@ export function ReviewHistoryPage() {
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-          >
-            <Download className="h-5 w-5" />
-            Export Results
-          </button>
-          <button
-            type="button"
             onClick={submitManuscript}
             className="inline-flex h-12 items-center justify-center rounded-lg bg-[#0478bf] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#036cae]"
           >
@@ -186,7 +179,6 @@ export function ReviewHistoryPage() {
               <input type="checkbox" aria-label={`Select ${row.title}`} className="hidden h-5 w-5 rounded border-slate-300 md:block" />
               <div>
                 <h2 className="text-base font-bold leading-6 text-slate-900">{row.title}</h2>
-                <p className="mt-1 text-xs font-semibold text-slate-500">DOI: {row.doi}</p>
               </div>
               <div className="text-base font-semibold leading-6 text-slate-500">
                 {authorLines(row.authors).map((author) => (
