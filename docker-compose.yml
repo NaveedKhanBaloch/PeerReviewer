@@ -1,7 +1,67 @@
-version: '3.8'
 services:
-  grobid:
-    image: grobid/grobid:0.8.0
-    ports:
-      - "8070:8070"
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    environment:
+      PORT: 80
+      BACKEND_UPSTREAM: http://api:8000
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-50m}
+    depends_on:
+      - api
     restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      PORT: 8000
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-research_reviewer}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}@postgres:5432/${POSTGRES_DB:-research_reviewer}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in Coolify}
+      GEMINI_FLASH_MODEL: ${GEMINI_FLASH_MODEL:-gemini-2.5-flash}
+      GEMINI_PRO_MODEL: ${GEMINI_PRO_MODEL:-gemini-2.5-pro}
+      SEMANTIC_SCHOLAR_API_KEY: ${SEMANTIC_SCHOLAR_API_KEY:-}
+      GROBID_URL: http://grobid:8070
+      OUTPUTS_DIR: /app/runtime/outputs
+      UPLOADS_DIR: /app/runtime/uploads
+      MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-50}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in Coolify}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS to your public web URL}
+      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL to your public web URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ai-research-reviewer.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AI Research Reviewer}
+    volumes:
+      - api_outputs:/app/runtime/outputs
+      - api_uploads:/app/runtime/uploads
+    depends_on:
+      - postgres
+      - grobid
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-research_reviewer}
+      POSTGRES_USER: ${POSTGRES_USER:-research_reviewer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  grobid:
+    image: grobid/grobid:0.8.2-crf
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  api_outputs:
+  api_uploads:

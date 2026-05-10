@@ -13,5 +13,9 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 
+ENV PORT=80 \
+    BACKEND_UPSTREAM=http://api:8000 \
+    CLIENT_MAX_BODY_SIZE=50m
+
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html

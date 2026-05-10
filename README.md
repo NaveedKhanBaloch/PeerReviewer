@@ -27,6 +27,7 @@ The project is built as a two-part system:
 - [API Reference](./docs/api-reference.md)
 - [Database Schema](./docs/database-schema.md)
 - [Operations and Deployment Notes](./docs/operations.md)
+- [Coolify Deployment](./docs/coolify-deployment.md)
 - [Railway Deployment](./docs/railway-deployment.md)
 - [Troubleshooting](./docs/troubleshooting.md)
 - PDF bundle: [`AI_Research_Paper_Reviewer_Documentation.pdf`](./docs/AI_Research_Paper_Reviewer_Documentation.pdf)
@@ -141,6 +142,17 @@ npm run build
 3. Watch progress stream in real time
 4. Open the completed review from the sidebar
 5. Scroll to the Gemini raw output sections when debugging model behavior
+
+## Coolify Deployment
+
+For the current production deployment target, use the root [`docker-compose.yml`](./docker-compose.yml) in Coolify. It builds and runs:
+
+- `web`: React/Nginx frontend that proxies `/api` to the backend
+- `api`: FastAPI backend
+- `postgres`: persistent production database
+- `grobid`: internal PDF extraction service
+
+Only assign a public domain to the `web` service. See [Coolify Deployment](./docs/coolify-deployment.md) for required environment variables, DNS setup, storage notes, and verification steps.
 
 ## Railway Deployment
 

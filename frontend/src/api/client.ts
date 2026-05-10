@@ -5,7 +5,7 @@ import { toErrorMessage } from './errorMessage';
 import { useAuthStore } from '../stores/authStore';
 import type { FullReview, ReviewListItem, SignupResponse, TokenResponse, User, UserCreate, UserUpdate } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export const apiClient = axios.create({
   baseURL: API_URL,

@@ -57,6 +57,21 @@ class Settings(BaseSettings):
             self.GROBID_URL = f"http://{self.GROBID_HOSTPORT}"
         return self
 
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        """Fail fast when production starts with unsafe defaults."""
+        if self.ENVIRONMENT.lower() != "production":
+            return self
+        if self.SECRET_KEY in {"change-this-in-production-min-32-chars", "change-this-to-a-random-32-char-string-in-production"}:
+            raise ValueError("SECRET_KEY must be changed for production.")
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters in production.")
+        if not self.ALLOWED_ORIGINS.strip():
+            raise ValueError("ALLOWED_ORIGINS must be set in production.")
+        if not self.FRONTEND_URL.strip():
+            raise ValueError("FRONTEND_URL must be set in production.")
+        return self
+
     def get_outputs_path(self) -> Path:
         """Ensure the outputs directory exists and return it."""
         path = Path(self.OUTPUTS_DIR)

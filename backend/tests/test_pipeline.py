@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -107,8 +108,35 @@ async def client():
 
 
 @pytest_asyncio.fixture
-async def created_review_id(client: AsyncClient) -> str:
+async def auth_session(client: AsyncClient) -> tuple[AsyncClient, str]:
+    """Create a user and attach its bearer token to the test client."""
+    suffix = uuid.uuid4().hex[:12]
+    email = f"reviewer_{suffix}@example.com"
+    username = f"reviewer_{suffix}"
+    signup_response = await client.post(
+        "/api/auth/signup",
+        json={
+            "email": email,
+            "username": username,
+            "password": "TestPass123",
+            "full_name": "Test Reviewer",
+        },
+    )
+    assert signup_response.status_code == 201
+    login_response = await client.post(
+        "/api/auth/login",
+        json={"identifier": email, "password": "TestPass123"},
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json()["access_token"]
+    client.headers.update({"Authorization": f"Bearer {access_token}"})
+    return client, access_token
+
+
+@pytest_asyncio.fixture
+async def created_review_id(auth_session: tuple[AsyncClient, str]) -> str:
     """Create a fake arXiv review and return its id."""
+    client, _access_token = auth_session
     response = await client.post("/api/review", data={"arxiv_url": "https://arxiv.org/abs/2503.08569"})
     assert response.status_code == 200
     review_id = response.json()["review_id"]
@@ -129,17 +157,25 @@ async def test_health(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_arxiv_review(client: AsyncClient):
+async def test_arxiv_review(auth_session: tuple[AsyncClient, str]):
     """Creating an arXiv review returns a completed structured review."""
+    client, access_token = auth_session
     response = await client.post("/api/review", data={"arxiv_url": "https://arxiv.org/abs/2503.08569"})
     assert response.status_code == 200
     review_id = response.json()["review_id"]
 
-    sse_response = await client.get(f"/api/progress/{review_id}")
+    for _ in range(50):
+        detail = await client.get(f"/api/review/{review_id}")
+        if detail.status_code == 200 and detail.json()["status"] == "complete":
+            break
+        await asyncio.sleep(0.05)
+    else:
+        raise AssertionError("Review never completed.")
+
+    sse_response = await client.get(f"/api/progress/{review_id}", params={"token": access_token})
     assert sse_response.status_code == 200
     assert '"status": "complete"' in sse_response.text
 
-    detail = await client.get(f"/api/review/{review_id}")
     payload = detail.json()
     assert detail.status_code == 200
     assert 1 <= payload["overall_score"] <= 10

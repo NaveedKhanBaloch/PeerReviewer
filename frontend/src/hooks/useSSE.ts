@@ -4,7 +4,7 @@ import { useReviewStore } from '../stores/reviewStore';
 import { useAuthStore } from '../stores/authStore';
 import type { ProgressEvent } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export function useSSE(reviewId: string | null) {
   const esRef = useRef<EventSource | null>(null);
