@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
-  TimerReset,
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 
@@ -24,75 +23,73 @@ const heroImage =
   'https://commons.wikimedia.org/wiki/Special:FilePath/Laptop_on_desk_book_stacks_(Unsplash).jpg';
 
 const problemPoints = [
-  'Novelty can be hard to judge before reviewers compare your claims with adjacent literature.',
-  'Methodology gaps, missing controls, unclear metrics, and weak reproducibility details often surface too late.',
-  'Authors need reviewer-style feedback while there is still time to revise the manuscript with discipline.',
+  'Reviewer objections are predictable: weak novelty, unclear methods, unsupported claims, missing baselines, and thin reproducibility details.',
+  'Most authors discover these issues only after weeks or months inside formal review, when revision pressure is already high.',
+  'A strong pre-submission review gives authors a sharper manuscript, a clearer revision plan, and fewer preventable surprises.',
 ];
 
 const reviewDimensions = [
-  'Originality and significance',
-  'Methodology and rigour',
-  'Evidence and reproducibility',
-  'Related literature coverage',
-  'Clarity and organization',
-  'Ethics, limitations, and fit',
+  'Reviewer calibration',
+  'Evidence-backed flaws',
+  'Score validation',
+  'Revision priorities',
 ];
 
 const workflowSteps = [
   {
-    title: 'Submit the manuscript',
-    text: 'Upload a manuscript PDF. The reviewer extracts paper content, metadata, sections, figures, tables, and references.',
+    title: 'Upload the manuscript',
+    text: 'Submit a PDF and get a structured pre-submission review workspace built around the paper, not a generic writing checklist.',
     Icon: FileText,
   },
   {
-    title: 'Map the research context',
-    text: 'The system checks nearby literature, compares contribution claims, and prepares a field-aware research brief.',
+    title: 'Map the review risk',
+    text: 'The paper is assessed for novelty, methodology, evidence, presentation, ethics, reproducibility, and likely reviewer concerns.',
     Icon: Library,
   },
   {
-    title: 'Generate structured critique',
-    text: 'The review agent produces dimension scores, major flaws, minor points, summary, recommendation, and a downloadable report.',
+    title: 'Revise with confidence',
+    text: 'Receive a reviewer-style report with calibrated scoring, evidence-backed major flaws, minor fixes, and prioritized next steps.',
     Icon: ClipboardCheck,
   },
 ];
 
 const featureCards = [
   {
-    title: 'Reviewer-style scoring',
-    text: 'Six-dimension scoring helps authors see whether the paper is weak in novelty, method, evidence, writing, literature, or ethics.',
+    title: 'Human-review calibrated',
+    text: 'The critique reflects how expert reviewers evaluate papers: summary, strengths, weaknesses, evidence, rating logic, and confidence.',
     Icon: BarChart3,
   },
   {
-    title: 'Evidence-first comments',
-    text: 'Major concerns are tied to manuscript evidence, so feedback reads like an actionable review rather than generic advice.',
+    title: 'Evidence-backed concerns',
+    text: 'Major flaws are tied to manuscript locations such as sections, figures, tables, claims, methods, and missing reporting details.',
     Icon: Target,
   },
   {
-    title: 'Related-literature checks',
-    text: 'Semantic Scholar context helps identify nearby work, citation gaps, and claims that need sharper positioning.',
+    title: 'Literature-aware positioning',
+    text: 'The report flags contribution overlap, missing citations, and claims that need sharper separation from nearby work.',
     Icon: FileSearch,
   },
   {
-    title: 'Real-time progress',
-    text: 'Progress tracking keeps authors informed while extraction, literature search, analysis, and report generation run.',
-    Icon: TimerReset,
+    title: 'Validated scoring',
+    text: 'Overall readiness is checked against dimension scores so the recommendation stays consistent with the paper’s actual weaknesses.',
+    Icon: ShieldCheck,
   },
   {
-    title: 'PDF report output',
-    text: 'Download a clean report that can guide revision meetings, co-author discussion, or pre-submission polishing.',
+    title: 'Revision priority plan',
+    text: 'Separate critical blockers from minor polish so authors know what to fix first before resubmission or supervisor review.',
     Icon: MessageSquareText,
   },
   {
-    title: 'Private account access',
-    text: 'Self-serve accounts keep each author’s manuscript review history, reports, and profile organized in one workspace.',
+    title: 'Private review workspace',
+    text: 'Keep manuscript reports, scores, outcomes, downloads, and progress history organized in a secure author workspace.',
     Icon: LockKeyhole,
   },
 ];
 
 const audienceCards = [
-  ['Authors', 'Find weak claims, missing details, and unclear structure before journal or conference submission.'],
-  ['Supervisors', 'Give students repeatable feedback checkpoints before spending time on line-by-line review.'],
-  ['Research groups', 'Create a shared pre-submission quality gate for manuscripts, revisions, and internal drafts.'],
+  ['Authors', 'Find the objections reviewers are likely to raise before the manuscript reaches a journal or conference desk.'],
+  ['Supervisors', 'Give students a consistent quality checkpoint before investing time in detailed line-by-line feedback.'],
+  ['Research groups', 'Create a repeatable readiness gate for drafts, revisions, internal reviews, and collaborative writing cycles.'],
 ];
 
 export function LandingPage() {
@@ -138,25 +135,25 @@ export function LandingPage() {
           <div className="max-w-3xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-200/25 bg-sky-300/15 px-3 py-1 text-xs font-semibold text-sky-100">
               <Sparkles className="h-3.5 w-3.5" />
-              Reviewer-style feedback before submission
+              Peer-review intelligence before submission
             </div>
-            <h1 className="text-5xl font-bold leading-tight tracking-normal text-white md:text-6xl">
-              Find the reviewer objections before the reviewer does.
+            <h1 className="text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl md:text-6xl">
+              Know what reviewers will question before you submit.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
-              AI Research Reviewer helps authors strengthen manuscripts before journal or conference submission by combining content extraction, related-literature context, novelty analysis, scoring, and editorial critique in one guided workflow.
+              AI Research Reviewer turns your draft into a calibrated pre-submission report with evidence-backed flaws, readiness scoring, literature-aware positioning, and a clear revision plan authors can act on immediately.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link to="/login?redirect=/app" className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-400 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-sky-950/30 transition hover:bg-sky-300">
+            <div className="mt-8 grid gap-3 sm:max-w-xl sm:grid-cols-2">
+              <Link to="/login?redirect=/app" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-sky-400 px-5 py-3 text-center font-semibold text-slate-950 shadow-lg shadow-sky-950/30 transition hover:bg-sky-300">
                 Review a manuscript
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <a href="#workflow" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 px-5 py-3 font-semibold text-white transition hover:border-white/50">
+              <a href="#workflow" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-center font-semibold text-white transition hover:border-white/60">
                 See how it works
               </a>
             </div>
             <div className="mt-8 grid max-w-2xl gap-3 text-sm text-slate-200 sm:grid-cols-3">
-              {['PDF manuscript input', 'Six-dimension scoring', 'Downloadable report'].map((item) => (
+              {['Reviewer-calibrated critique', 'Validated readiness score', 'Downloadable revision report'].map((item) => (
                 <div key={item} className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-sky-300" />
                   <span>{item}</span>
@@ -168,11 +165,11 @@ export function LandingPage() {
           <div className="self-end rounded-lg border border-white/15 bg-white/95 p-4 text-slate-950 shadow-2xl shadow-slate-950/40 backdrop-blur">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div>
-                <div className="text-xs font-semibold uppercase text-slate-500">Manuscript readiness</div>
-                <div className="mt-1 text-2xl font-bold">Pre-submission report</div>
+                <div className="text-xs font-semibold uppercase text-slate-500">Reviewer readiness</div>
+                <div className="mt-1 text-2xl font-bold">Author action report</div>
               </div>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                Revise first
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">
+                Major revision risk
               </span>
             </div>
             <div className="mt-4 grid gap-3">
@@ -181,20 +178,23 @@ export function LandingPage() {
                   <div>
                     <div className="text-sm font-semibold">{dimension}</div>
                     <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div className="h-full rounded-full bg-sky-500" style={{ width: `${78 - index * 12}%` }} />
+                      <div
+                        className={`h-full rounded-full ${index === 1 ? 'bg-rose-500' : index === 3 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${84 - index * 14}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="text-sm font-bold text-slate-700">{(7.8 - index * 1.2).toFixed(1)}</div>
+                  <div className="text-sm font-bold text-slate-700">{['8.4', '6.1', '7.3', '5 fixes'][index]}</div>
                 </div>
               ))}
             </div>
             <div className="mt-4 rounded-lg bg-slate-950 p-4 text-white">
               <div className="flex items-center gap-2 text-sm font-semibold text-sky-200">
                 <ShieldCheck className="h-4 w-4" />
-                Reviewer concern
+                Highest-priority reviewer concern
               </div>
               <p className="mt-2 text-sm leading-6 text-slate-200">
-                The contribution needs sharper positioning against related work, and the experimental protocol should describe controls, parameter settings, and reproducibility details more explicitly.
+                The contribution is promising, but the methods section needs clearer controls, reproducibility details, and stronger positioning against nearby work before submission.
               </p>
             </div>
           </div>
@@ -206,10 +206,10 @@ export function LandingPage() {
           <div className="max-w-3xl">
             <div className="text-sm font-semibold uppercase text-sky-700">Why authors need this</div>
             <h2 className="mt-3 text-4xl font-bold tracking-normal text-slate-950">
-              Submission is expensive. Preventable reviewer objections are even more expensive.
+              A manuscript should not meet its first serious reviewer at the journal desk.
             </h2>
             <p className="mt-5 text-lg leading-8 text-slate-600">
-              Publisher guidance repeatedly points to issues such as weak novelty, poor fit, unsupported conclusions, incomplete methods, unclear writing, and outdated or incomplete references. This tool helps authors inspect those risks before the manuscript enters formal review.
+              The most damaging review comments are often avoidable: missing methodological detail, unclear contribution, unsupported conclusions, weak literature positioning, and reproducibility gaps. This tool helps authors find those risks while there is still time to revise with discipline.
             </p>
           </div>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
@@ -230,9 +230,9 @@ export function LandingPage() {
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
             <div>
               <div className="text-sm font-semibold uppercase text-sky-300">Workflow</div>
-              <h2 className="mt-3 text-4xl font-bold tracking-normal">From draft to reviewer-style report.</h2>
+              <h2 className="mt-3 text-4xl font-bold tracking-normal">From rough draft to submission-ready revision plan.</h2>
               <p className="mt-5 text-lg leading-8 text-slate-300">
-                The system turns a manuscript into a structured critique that authors can act on before submission, revision, or supervisor review.
+                The report reads like a serious pre-review: calibrated, specific, constructive, and focused on the changes most likely to improve publication readiness.
               </p>
             </div>
             <div className="grid gap-4">
@@ -253,14 +253,43 @@ export function LandingPage() {
         </div>
       </section>
 
+      <section className="border-b border-slate-200 bg-white py-20">
+        <div className="mx-auto max-w-7xl px-5 sm:px-6">
+          <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <div className="text-sm font-semibold uppercase text-sky-700">What the report gives you</div>
+              <h2 className="mt-3 text-4xl font-bold tracking-normal text-slate-950">
+                Not just feedback. A submission decision rehearsal.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                The report helps authors understand how a reviewer may interpret the paper, why the readiness score was assigned, and which revisions matter most before submission.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                ['Calibrated review tone', 'Feedback follows the structure and specificity authors expect from serious academic review.', 'bg-emerald-50 text-emerald-700'],
+                ['Evidence trail', 'Major issues point to manuscript evidence so authors can verify and fix the concern quickly.', 'bg-sky-50 text-sky-700'],
+                ['Consistency check', 'Scores and recommendations are checked so the outcome matches the severity of the findings.', 'bg-amber-50 text-amber-700'],
+                ['Action order', 'Critical blockers, major revisions, and minor polish are separated into a practical revision path.', 'bg-rose-50 text-rose-700'],
+              ].map(([title, text, tone]) => (
+                <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                  <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${tone}`}>{title}</span>
+                  <p className="mt-4 text-sm font-medium leading-6 text-slate-600">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="features" className="bg-white py-20">
         <div className="mx-auto max-w-7xl px-5 sm:px-6">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div className="max-w-3xl">
               <div className="text-sm font-semibold uppercase text-sky-700">Capabilities</div>
-              <h2 className="mt-3 text-4xl font-bold tracking-normal">Built for the questions reviewers actually ask.</h2>
+              <h2 className="mt-3 text-4xl font-bold tracking-normal">Built for the objections reviewers actually raise.</h2>
             </div>
-            <Link to="/login?redirect=/app" className="inline-flex w-fit items-center gap-2 rounded-lg bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-800">
+            <Link to="/login?redirect=/app" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 py-3 text-center font-semibold text-white transition hover:bg-slate-800 sm:w-fit">
               Start reviewing
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -285,10 +314,10 @@ export function LandingPage() {
             <div>
               <div className="text-sm font-semibold uppercase text-sky-700">Who it helps</div>
               <h2 className="mt-3 text-4xl font-bold tracking-normal text-slate-950">
-                A practical quality gate for authors, labs, and research teams.
+                A practical quality gate for authors, supervisors, and research teams.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Use it before first submission, after major revisions, or during internal manuscript meetings. It does not replace expert peer review; it helps authors arrive better prepared.
+                Use it before first submission, after major revisions, before supervisor meetings, or as a lab-wide manuscript readiness checkpoint. It does not replace expert peer review; it helps authors arrive better prepared.
               </p>
             </div>
             <div className="grid gap-4">
@@ -318,13 +347,13 @@ export function LandingPage() {
                   Manuscript readiness starts before submission
                 </div>
                 <h2 className="mt-4 max-w-3xl text-4xl font-bold tracking-normal">
-                  Give your paper a stronger first impression.
+                  Turn reviewer risk into a focused revision plan.
                 </h2>
                 <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-300">
-                  Turn drafts into focused revision plans with structured critique, evidence-backed concerns, and clear next steps for authors.
+                  Upload a manuscript, identify the strongest objections, and leave with a clear order of fixes before the paper enters formal review.
                 </p>
               </div>
-              <Link to="/login?redirect=/app" className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-sky-300">
+              <Link to="/login?redirect=/app" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-sky-400 px-5 py-3 text-center font-semibold text-slate-950 transition hover:bg-sky-300 sm:w-auto">
                 Create account
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -341,7 +370,7 @@ export function LandingPage() {
               AI Research Reviewer
             </div>
             <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-              A pre-submission review assistant for research manuscripts. Create an account to start reviewing.
+              Literature-aware, reviewer-calibrated pre-submission feedback for research manuscripts.
             </p>
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
@@ -351,15 +380,15 @@ export function LandingPage() {
             <Link to="/privacy" className="transition hover:text-white">
               Privacy Policy
             </Link>
-            <a href="https://publicationethics.org/resources/guidelines/cope-ethical-guidelines-peer-reviewers" className="transition hover:text-white" rel="noreferrer" target="_blank">
+            <Link to="/peer-review-ethics" className="transition hover:text-white">
               COPE peer-review ethics
-            </a>
-            <a href="https://www.springer.com/gp/authors-editors/journal-author/journal-author-helpdesk/common-reasons-for-rejection" className="transition hover:text-white" rel="noreferrer" target="_blank">
+            </Link>
+            <Link to="/common-rejection-reasons" className="transition hover:text-white">
               Common rejection reasons
-            </a>
-            <a href="https://www.elsevier.com/researcher/author/policies-and-guidelines" className="transition hover:text-white" rel="noreferrer" target="_blank">
+            </Link>
+            <Link to="/author-guidance" className="transition hover:text-white">
               Author guidance
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

@@ -9,21 +9,21 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-FIELD_TO_VENUE = {
-    "Machine Learning": "ICLR.cc/2025/Conference",
-    "Deep Learning": "ICLR.cc/2025/Conference",
-    "Artificial Intelligence": "NeurIPS.cc/2024/Conference",
-    "Computer Vision": "NeurIPS.cc/2024/Conference",
-    "Natural Language Processing": "NeurIPS.cc/2024/Conference",
-    "Reinforcement Learning": "ICLR.cc/2025/Conference",
-    "Robotics": "NeurIPS.cc/2024/Conference",
-    "Computational Biology": "NeurIPS.cc/2024/Conference",
-    "Data Science": "NeurIPS.cc/2024/Conference",
-    "default": "ICLR.cc/2025/Conference",
+FIELD_TO_VENUES = {
+    "Machine Learning": ["ICLR.cc/2025/Conference", "NeurIPS.cc/2024/Conference", "ICLR.cc/2024/Conference"],
+    "Deep Learning": ["ICLR.cc/2025/Conference", "NeurIPS.cc/2024/Conference", "ICLR.cc/2024/Conference"],
+    "Artificial Intelligence": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference", "ICLR.cc/2024/Conference"],
+    "Computer Vision": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference", "ICLR.cc/2024/Conference"],
+    "Natural Language Processing": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference", "ICLR.cc/2024/Conference"],
+    "Reinforcement Learning": ["ICLR.cc/2025/Conference", "ICLR.cc/2024/Conference", "NeurIPS.cc/2024/Conference"],
+    "Robotics": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference"],
+    "Computational Biology": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference"],
+    "Data Science": ["NeurIPS.cc/2024/Conference", "ICLR.cc/2025/Conference"],
+    "default": ["ICLR.cc/2025/Conference", "NeurIPS.cc/2024/Conference", "ICLR.cc/2024/Conference"],
 }
 
 SUPPORTED_OPENREVIEW_FIELDS = {
-    key for key in FIELD_TO_VENUE.keys() if key != "default"
+    key for key in FIELD_TO_VENUES.keys() if key != "default"
 }
 
 OPENREVIEW_STOPWORDS = {
@@ -61,6 +61,13 @@ def _query_tokens(text: str) -> set[str]:
     }
 
 
+def _relevance_score(query_tokens: set[str], title: str, abstract: str) -> int:
+    """Score a candidate OpenReview paper against submitted-paper terms."""
+    title_tokens = _query_tokens(title)
+    abstract_tokens = _query_tokens(abstract)
+    return (3 * len(query_tokens & title_tokens)) + len(query_tokens & abstract_tokens)
+
+
 async def fetch_openreview_examples(
     title: str,
     abstract: str,
@@ -68,7 +75,6 @@ async def fetch_openreview_examples(
     max_examples: int = 3,
 ) -> list[dict]:
     """Fetch similar OpenReview submissions and a few real human reviews."""
-    del abstract
     try:
         if field not in SUPPORTED_OPENREVIEW_FIELDS:
             logger.info("Skipping OpenReview examples for unsupported field: %s", field)
@@ -79,14 +85,15 @@ async def fetch_openreview_examples(
         client = openreview.api.OpenReviewClient(
             baseurl="https://api2.openreview.net"
         )
-        venue = FIELD_TO_VENUE[field]
-        keyword_query = " ".join((title or "").split()[:6]).strip()
+        venues = FIELD_TO_VENUES.get(field, FIELD_TO_VENUES["default"])
+        keyword_query = " ".join((title or "").split()[:8]).strip()
         if not keyword_query:
             return []
+        query_text = f"{title} {abstract} {field}"
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
-            lambda: _fetch_sync(client, venue, keyword_query, max_examples),
+            lambda: _fetch_sync(client, venues, query_text, max_examples, field in SUPPORTED_OPENREVIEW_FIELDS),
         )
     except Exception as exc:
         logger.warning("OpenReview fetch failed: %s", exc)
@@ -95,40 +102,55 @@ async def fetch_openreview_examples(
 
 def _fetch_sync(
     client: Any,
-    venue: str,
-    keyword_query: str,
+    venues: list[str],
+    query_text: str,
     max_examples: int,
+    allow_general_fallback: bool,
 ) -> list[dict]:
     """Synchronously fetch review examples from OpenReview."""
-    try:
-        submissions = client.get_notes(
-            invitation=f"{venue}/-/Submission",
-            limit=20,
-            offset=0,
-        )
-    except Exception as exc:
-        logger.warning("OpenReview submission fetch failed: %s", exc)
-        return []
-
-    if not submissions:
-        return []
-
-    examples: list[dict] = []
-    query_words = _query_tokens(keyword_query)
+    query_words = _query_tokens(query_text)
     if not query_words:
         return []
 
-    for submission in submissions[:30]:
-        content = getattr(submission, "content", {}) or {}
-        title_field = content.get("title", {})
-        paper_title = _extract_value(title_field)
-        if not paper_title:
+    candidates: list[tuple[int, str, Any]] = []
+    for venue in venues:
+        try:
+            submissions = client.get_notes(
+                invitation=f"{venue}/-/Submission",
+                limit=75,
+                offset=0,
+                sort="tcdate:desc",
+            )
+        except Exception as exc:
+            logger.warning("OpenReview submission fetch failed for %s: %s", venue, exc)
             continue
 
-        title_words = _query_tokens(paper_title)
-        overlap = len(query_words & title_words)
-        if overlap < 2:
+        for submission in submissions or []:
+            content = getattr(submission, "content", {}) or {}
+            paper_title = _extract_value(content.get("title", {}))
+            paper_abstract = _extract_value(content.get("abstract", {}))
+            if not paper_title:
+                continue
+            score = _relevance_score(query_words, paper_title, paper_abstract)
+            candidates.append((score, venue, submission))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    relevant_candidates = [item for item in candidates if item[0] >= 2]
+    if not relevant_candidates and allow_general_fallback:
+        relevant_candidates = candidates[:10]
+
+    examples: list[dict] = []
+    seen_forums: set[str] = set()
+    for relevance, venue, submission in relevant_candidates[:30]:
+        if getattr(submission, "id", "") in seen_forums:
             continue
+        seen_forums.add(getattr(submission, "id", ""))
+
+        content = getattr(submission, "content", {}) or {}
+        paper_title = _extract_value(content.get("title", {}))
 
         try:
             replies = client.get_notes(forum=submission.id, limit=50)
@@ -178,6 +200,9 @@ def _fetch_sync(
             {
                 "paper_title": _truncate(paper_title, 100),
                 "decision": decision,
+                "venue": venue,
+                "relevance_score": relevance,
+                "calibration_scope": "similar paper" if relevance >= 2 else "general venue calibration",
                 "reviews": reviews,
             }
         )
@@ -198,6 +223,10 @@ def format_examples_for_prompt(examples: list[dict]) -> str:
         "===============================================================",
         "These are actual peer reviews written by expert human reviewers",
         "at top-tier ML/AI conferences (ICLR, NeurIPS, ICML).",
+        "Some examples may be field-calibration examples when exact topical",
+        "matches are unavailable; use them for reviewer tone, specificity,",
+        "score calibration, and structure rather than as evidence about the",
+        "submitted manuscript.",
         "",
         "Study these examples carefully before writing your review:",
         "  - Mirror their LEVEL OF SPECIFICITY (cite exact sections/tables)",
@@ -215,6 +244,7 @@ def format_examples_for_prompt(examples: list[dict]) -> str:
             [
                 f"--- Example {i} of {total} ---",
                 f"Paper: {example.get('paper_title', 'Unknown paper')}",
+                f"Venue: {example.get('venue', 'OpenReview')} | Scope: {example.get('calibration_scope', 'review calibration')}",
                 f"Decision: {example.get('decision', 'Unknown')}",
                 "",
             ]

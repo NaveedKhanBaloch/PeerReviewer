@@ -232,6 +232,7 @@ async def run_pipeline(review_id: str, paper_bytes: Optional[bytes], arxiv_id: O
                 "field": "",
                 "research_analysis": {},
                 "related_papers": [],
+                "openreview_examples_prompt": "",
                 "publication_check": {},
                 "research_llm_raw_output": "",
                 "dimension_scores": [],

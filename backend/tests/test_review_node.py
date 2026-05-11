@@ -6,7 +6,13 @@ import pytest
 
 from agent.graph import _route_after_research
 from agent.nodes.research_node import _duplicate_publication_result, _is_bad_title_candidate, _title_candidates, _trim_first_page_before_abstract
-from agent.nodes.review_node import _apply_publication_duplicate_guardrail, _load_json_output, _normalize_review_data, review_node
+from agent.nodes.review_node import (
+    _apply_publication_duplicate_guardrail,
+    _calculate_weighted_score,
+    _load_json_output,
+    _normalize_review_data,
+    review_node,
+)
 from services.lit_search import _sanitize_query, detect_publication_duplicate, titles_match_exact
 from services.openreview_service import _query_tokens, fetch_openreview_examples
 
@@ -223,6 +229,35 @@ async def test_openreview_examples_are_skipped_for_unsupported_field():
     )
 
     assert examples == []
+
+
+def test_weighted_score_is_recalculated_from_dimension_scores():
+    """The final score should follow the rubric weights instead of trusting model arithmetic."""
+    dimensions = [
+        {"dimension": "Originality & Significance", "score": 8.0},
+        {"dimension": "Methodology & Scientific Rigour", "score": 6.0},
+        {"dimension": "Data, Analysis & Results", "score": 7.0},
+        {"dimension": "Figures, Tables & Data Presentation", "score": 9.0},
+        {"dimension": "Presentation, Language & Structure", "score": 8.0},
+        {"dimension": "Ethics, Reproducibility & Open Science", "score": 6.0},
+    ]
+
+    assert _calculate_weighted_score(dimensions) == 7.1
+
+    normalized = _normalize_review_data(
+        {
+            "dimension_scores": dimensions,
+            "overall_score": 9.9,
+            "recommendation": "Accept",
+            "summary": "The paper proposes a useful method.",
+            "general_comments": "The manuscript is promising but has fixable limitations.",
+            "major_flaws": [{"issue": "Missing ablation", "evidence": "Section 4", "remedy": "Add ablations"}],
+            "minor_points": [],
+        }
+    )
+
+    assert normalized["overall_score"] == 7.1
+    assert normalized["recommendation"] == "Minor revision"
 
 
 def test_publication_duplicate_guardrail_forces_reject_and_low_originality():

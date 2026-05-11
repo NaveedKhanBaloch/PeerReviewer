@@ -26,6 +26,28 @@ Return ONLY one valid JSON object. Do not add markdown, commentary, or extra key
 If the input is truncated, preserve all complete information and close incomplete
 strings, arrays, and objects with concise professional text."""
 
+REVIEW_VALIDATION_SYSTEM_PROMPT = """You are a senior meta-reviewer and quality-control editor.
+Audit an AI-generated peer review before it is shown to authors.
+
+Return ONLY valid JSON with this exact schema:
+{
+  "passes_validation": true,
+  "validation_findings": ["string"],
+  "corrected_review": null
+}
+
+Set passes_validation=false and provide corrected_review when you find any of:
+- recommendation inconsistent with the score thresholds
+- overall_score not equal to the weighted dimension formula
+- major flaw without specific manuscript evidence
+- claims not supported by the provided manuscript excerpts or research analysis
+- generic feedback that should be made more specific
+- missing acknowledgement that no major flaws were identified
+
+The corrected_review must preserve the original review schema and should edit
+only what is necessary. Do not invent citations, tables, figures, or section
+numbers that are not present in the manuscript excerpts."""
+
 
 def _strip_json_fences(raw_text: str) -> str:
     """Remove markdown fences from model output when present."""
@@ -89,6 +111,48 @@ def _normalize_dimension_scores(value: object) -> list[dict]:
 def _normalize_recommendation(value: object) -> str | None:
     """Keep only recommendations supported by the database enum."""
     return value if isinstance(value, str) and value in VALID_RECOMMENDATIONS else None
+
+
+def _calculate_weighted_score(dimension_scores: list[dict]) -> float | None:
+    """Calculate the rubric-weighted score when all six dimensions are present."""
+    weights = {
+        "originality": 0.20,
+        "methodology": 0.25,
+        "data": 0.20,
+        "figures": 0.10,
+        "presentation": 0.10,
+        "ethics": 0.15,
+    }
+    found: dict[str, float] = {}
+    for item in dimension_scores:
+        dimension = _as_text(item.get("dimension")).lower()
+        score = _as_optional_score(item.get("score"))
+        if score is None:
+            continue
+        for key in weights:
+            if key in dimension and key not in found:
+                found[key] = max(0.0, min(10.0, score))
+                break
+    if len(found) != len(weights):
+        return None
+    return round(sum(found[key] * weight for key, weight in weights.items()), 1)
+
+
+def _recommendation_for_score(score: float | None, major_flaws: list) -> str | None:
+    """Return a conservative recommendation suggested by score and major flaws."""
+    if score is None:
+        return None
+    has_critical = any(
+        isinstance(item, dict) and _as_text(item.get("severity")).lower().startswith("critical")
+        for item in major_flaws
+    )
+    if has_critical or score < 4.0:
+        return "Reject"
+    if score < 6.0 or len(major_flaws) >= 3:
+        return "Major revision"
+    if score < 7.5 or major_flaws:
+        return "Minor revision"
+    return "Accept"
 
 
 def _is_already_published(state: AgentState) -> bool:
@@ -207,13 +271,26 @@ def _normalize_review_data(review_data: dict) -> dict:
     if desk_rejected:
         recommendation = None
 
+    normalized_dimensions = [] if already_published else _normalize_dimension_scores(review_data.get("dimension_scores"))
+    weighted_score = _calculate_weighted_score(normalized_dimensions)
+    if not already_published and not desk_rejected and weighted_score is not None:
+        overall_score = weighted_score
+
+    major_flaws = _as_list(review_data.get("major_flaws"))
+    suggested_recommendation = _recommendation_for_score(overall_score, major_flaws)
+    if not already_published and not desk_rejected and suggested_recommendation:
+        if recommendation is None:
+            recommendation = suggested_recommendation
+        elif recommendation == "Accept" and suggested_recommendation != "Accept":
+            recommendation = suggested_recommendation
+
     return {
-        "dimension_scores": [] if already_published else _normalize_dimension_scores(review_data.get("dimension_scores")),
+        "dimension_scores": normalized_dimensions,
         "overall_score": overall_score,
         "recommendation": recommendation,
         "summary": _as_text(review_data.get("summary")),
         "general_comments": _as_text(review_data.get("general_comments")),
-        "major_flaws": _as_list(review_data.get("major_flaws")),
+        "major_flaws": major_flaws,
         "minor_points": [str(v) for v in _as_list(review_data.get("minor_points"))],
         "status": "complete",
     }
@@ -281,6 +358,60 @@ Return ONLY valid JSON."""
     return prompt
 
 
+def _build_validation_prompt(state: AgentState, review_data: dict) -> str:
+    """Build a compact validation prompt for second-pass review quality control."""
+    section_excerpts = "\n\n".join(
+        f"=== {name.upper()} ===\n{content[:1200]}"
+        for name, content in state.get("sections", {}).items()
+    )
+    related_papers = [
+        {
+            "title": paper.get("title"),
+            "year": paper.get("year"),
+            "relevance_note": paper.get("relevance_note"),
+        }
+        for paper in state.get("related_papers", [])[:8]
+    ]
+    return f"""SUBMITTED MANUSCRIPT CONTEXT
+Title: {state.get('title', 'Unknown')}
+Authors: {', '.join(state.get('authors', []))}
+Field: {state.get('field', 'Unknown')}
+Abstract:
+{state.get('abstract', 'Not available')[:3000]}
+
+Research analysis:
+{json.dumps(state.get('research_analysis', {}), ensure_ascii=False, indent=2)}
+
+Related papers:
+{json.dumps(related_papers, ensure_ascii=False, indent=2)}
+
+Manuscript section excerpts:
+{section_excerpts[:9000]}
+
+AI-generated review to validate:
+{json.dumps(review_data, ensure_ascii=False, indent=2)}
+
+Audit the review against the manuscript context and the scoring rubric.
+If it is acceptable, return passes_validation=true and corrected_review=null.
+If not, return passes_validation=false and corrected_review with the full corrected review JSON."""
+
+
+async def _run_second_pass_validation(llm: ChatGoogleGenerativeAI, state: AgentState, review_data: dict) -> tuple[dict, dict]:
+    """Run a non-fatal meta-review validation pass and return possibly corrected data."""
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=REVIEW_VALIDATION_SYSTEM_PROMPT),
+            HumanMessage(content=_build_validation_prompt(state, review_data)),
+        ]
+    )
+    validation_raw = str(response.content).strip()
+    validation_data = _load_json_output(validation_raw)
+    corrected = validation_data.get("corrected_review")
+    if isinstance(corrected, dict):
+        return corrected, validation_data
+    return review_data, validation_data
+
+
 async def review_node(state: AgentState) -> dict:
     """Generate the final structured review with Gemini Pro."""
     updates: dict = {"progress_messages": [*state.get("progress_messages", [])]}
@@ -326,6 +457,41 @@ async def review_node(state: AgentState) -> dict:
             updates["review_llm_raw_output"] = repaired_output
             review_data = _load_json_output(repaired_output)
         review_data = _apply_publication_duplicate_guardrail(review_data, state)
+        validation_data: dict = {
+            "passes_validation": None,
+            "validation_findings": ["Second-pass validation was not run."],
+            "corrected_review": None,
+        }
+        if not review_data.get("already_published") and not review_data.get("desk_rejected"):
+            try:
+                updates["progress_messages"].append("Running second-pass review validation...")
+                validation_llm = ChatGoogleGenerativeAI(
+                    model=settings.GEMINI_FLASH_MODEL,
+                    temperature=0,
+                    google_api_key=settings.GEMINI_API_KEY,
+                    max_output_tokens=12000,
+                    response_mime_type="application/json",
+                )
+                review_data, validation_data = await _run_second_pass_validation(validation_llm, state, review_data)
+            except Exception as exc:
+                logger.warning("Second-pass review validation failed; using initial review: %s", exc)
+                validation_data = {
+                    "passes_validation": False,
+                    "validation_findings": [f"Validation pass failed non-fatally: {format_model_error(exc)}"],
+                    "corrected_review": None,
+                }
+        updates["review_llm_raw_output"] = json.dumps(
+            {
+                "initial_review": raw_output,
+                "validation": {
+                    "passes_validation": validation_data.get("passes_validation"),
+                    "validation_findings": validation_data.get("validation_findings", []),
+                    "corrected_review_applied": isinstance(validation_data.get("corrected_review"), dict),
+                },
+                "final_review": review_data,
+            },
+            ensure_ascii=False,
+        )
         normalized_review_data = _normalize_review_data(review_data)
 
         validated_flaws = []

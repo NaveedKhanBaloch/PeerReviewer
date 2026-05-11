@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, FilePlus2, LoaderCircle, Mail, X } from 'lucide-react';
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, FilePlus2, LoaderCircle, LogOut, Mail, UserRound, X } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { AnalyticsPage } from './pages/AnalyticsPage';
+import { AuthorGuidancePage } from './pages/AuthorGuidancePage';
+import { CommonRejectionReasonsPage } from './pages/CommonRejectionReasonsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ReviewProgress } from './components/ReviewProgress';
@@ -15,6 +17,7 @@ import { useSSE } from './hooks/useSSE';
 import { HelpDocsPage } from './pages/HelpDocsPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { PeerReviewEthicsPage } from './pages/PeerReviewEthicsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReviewHistoryPage } from './pages/ReviewHistoryPage';
@@ -64,10 +67,11 @@ function notificationIconClass(type: AppNotification['type']) {
 
 function AppLayout() {
   const { dismissToast, isProcessing, processingReviewId, reviews, selectedReviewId, setSelectedReview, toasts } = useReviewStore();
-  const { user } = useAuthStore();
+  const { logout, user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
     try {
       return JSON.parse(window.localStorage.getItem('reviewer-notifications-read') || '[]') as string[];
@@ -160,6 +164,17 @@ function AppLayout() {
 
   const markAllRead = () => {
     setReadNotificationIds((current) => Array.from(new Set([...current, ...notifications.map((notification) => notification.id)])));
+  };
+
+  const openProfile = () => {
+    setProfileMenuOpen(false);
+    navigate('/app/profile');
+  };
+
+  const signOut = () => {
+    setProfileMenuOpen(false);
+    logout();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -258,16 +273,48 @@ function AppLayout() {
               <FilePlus2 className="h-5 w-5" />
               Submit manuscript
             </button>
-            <button type="button" onClick={() => navigate('/app/profile')} className="hidden items-center gap-3 rounded-lg px-1 py-1 hover:bg-slate-50 xl:flex">
-              {user?.avatar_url ? (
-                <img src={user.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
-              ) : (
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-sky-500 text-sm font-bold text-white">
-                  {userInitial}
-                </span>
-              )}
-              <ChevronDown className="h-4 w-4 text-slate-500" />
-            </button>
+            <div className="relative hidden xl:block">
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((value) => !value)}
+                className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-slate-50"
+                aria-label="Open profile menu"
+                aria-expanded={profileMenuOpen}
+              >
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-sky-500 text-sm font-bold text-white">
+                    {userInitial}
+                  </span>
+                )}
+                <ChevronDown className={`h-4 w-4 text-slate-500 transition ${profileMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {profileMenuOpen ? (
+                <div className="absolute right-0 top-12 z-40 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <div className="truncate text-sm font-bold text-slate-950">{userName}</div>
+                    <div className="mt-1 truncate text-xs font-medium text-slate-500">{user?.email}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openProfile}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                  >
+                    <UserRound className="h-4 w-4" />
+                    Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         <ErrorBoundary>
@@ -329,6 +376,9 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/peer-review-ethics" element={<PeerReviewEthicsPage />} />
+          <Route path="/common-rejection-reasons" element={<CommonRejectionReasonsPage />} />
+          <Route path="/author-guidance" element={<AuthorGuidancePage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/app/*" element={<ProtectedRoute redirect="/app"><AppLayout /></ProtectedRoute>} />
           <Route path="/profile" element={<Navigate to="/app/profile" replace />} />
