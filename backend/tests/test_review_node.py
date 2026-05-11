@@ -13,7 +13,7 @@ from agent.nodes.review_node import (
     _normalize_review_data,
     review_node,
 )
-from services.lit_search import _sanitize_query, detect_publication_duplicate, titles_match_exact
+from services.lit_search import _reference_search_queries, _sanitize_query, detect_publication_duplicate, titles_match_exact
 from services.openreview_service import _query_tokens, fetch_openreview_examples
 
 
@@ -47,6 +47,7 @@ def _base_state() -> dict:
                 "citation_count": 10,
             }
         ],
+        "literature_search_diagnostics": {},
         "research_llm_raw_output": "",
         "dimension_scores": [],
         "overall_score": None,
@@ -206,6 +207,23 @@ def test_sanitize_query_shortens_noisy_semantic_scholar_query():
     assert len(query.split()) == 8
     assert "NoC" in query
     assert "infrastructure" not in query
+
+
+def test_reference_search_queries_use_clean_reference_titles():
+    """Reference fallback should create concise searches from bibliography titles."""
+    references = [
+        {"title": "doi:10.1234/example"},
+        {"title": "A Transformer-Based Method for Biomedical Named Entity Recognition in Clinical Notes"},
+        {"title": "A Transformer-Based Method for Biomedical Named Entity Recognition in Clinical Notes"},
+        {"title": "Deep Learning Models for Literature-Aware Peer Review Support"},
+    ]
+
+    queries = _reference_search_queries(references)
+
+    assert queries == [
+        "transformer biomedical named entity recognition clinical notes",
+        "deep learning models literature aware peer review support",
+    ]
 
 
 def test_openreview_query_tokens_drop_generic_words():

@@ -6,6 +6,7 @@ import logging
 import re
 import unicodedata
 from collections import Counter
+from typing import Any
 import aiohttp
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,8 @@ STOPWORDS = {
     "using", "use", "via", "our", "paper", "study", "method", "results", "based",
     "journal", "article", "published", "volume", "issue", "pages", "doi",
 }
+
+MIN_RELATED_PAPERS = 3
 
 
 def normalize_title_for_match(title: str) -> str:
@@ -77,6 +80,24 @@ def _sanitize_query(value: str, max_words: int = 10) -> str:
     """Normalize a search query into a short Semantic Scholar-safe string."""
     tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-]+", value or "")
     return " ".join(tokens[:max_words]).strip()
+
+
+def _reference_search_queries(references: list[dict], max_queries: int = 4) -> list[str]:
+    """Build fallback searches from extracted reference titles."""
+    queries = []
+    for reference in references or []:
+        title = str(reference.get("title") or "").strip()
+        if _looks_like_noisy_query(title):
+            continue
+        tokens = _title_tokens(title)
+        if len(tokens) < 3:
+            continue
+        query = " ".join(tokens[:10])
+        if query and query not in queries:
+            queries.append(query)
+        if len(queries) >= max_queries:
+            break
+    return queries
 
 
 def _author_tokens(authors: list[str] | str | None) -> set[str]:
@@ -247,7 +268,45 @@ async def _semantic_scholar_title_match(session: aiohttp.ClientSession, query: s
     return data if isinstance(data, list) else []
 
 
-async def search_related_papers(title: str, abstract: str, api_key: str, search_query: str = "") -> list[dict]:
+def _merge_attempt_results(paper_map: dict[str, dict], papers: list[dict]) -> int:
+    """Merge papers and return how many new keys were added."""
+    added = 0
+    for paper in papers:
+        key = _paper_key(paper)
+        if key not in paper_map:
+            added += 1
+        paper_map.setdefault(key, paper)
+    return added
+
+
+def _normalize_related_results(title: str, paper_map: dict[str, dict]) -> list[dict]:
+    """Normalize, duplicate-check, and rank related paper payloads."""
+    papers = list(paper_map.values())
+    if not papers:
+        logger.warning("Semantic Scholar returned zero results for title/query: %s", title)
+        return []
+
+    normalized = [_normalize_semantic_paper(paper) for paper in papers]
+    duplicate_check = detect_publication_duplicate(title, [], normalized)
+    duplicate_ids = {match.get("s2_paper_id") for match in duplicate_check.get("matches", [])}
+
+    return sorted(
+        normalized,
+        key=lambda item: (
+            item.get("s2_paper_id") in duplicate_ids or item.get("duplicate_publication_match") is True,
+            item.get("citation_count") or 0,
+        ),
+        reverse=True,
+    )
+
+
+async def search_related_papers_with_diagnostics(
+    title: str,
+    abstract: str,
+    api_key: str,
+    search_query: str = "",
+    references: list[dict] | None = None,
+) -> dict[str, Any]:
     """Search Semantic Scholar by exact title and keywords, then return normalized results."""
     clean_title = "" if _looks_like_noisy_query(title) else title
     clean_search_query = "" if _looks_like_noisy_query(search_query) else search_query
@@ -260,46 +319,94 @@ async def search_related_papers(title: str, abstract: str, api_key: str, search_
     if keywords:
         query_terms.append(" ".join(keywords))
     deduped_keyword_queries = [query for query in dict.fromkeys(query_terms) if query]
+    reference_queries = _reference_search_queries(references or [])
 
-    if not title_queries and not deduped_keyword_queries:
-        return []
+    if not title_queries and not deduped_keyword_queries and not reference_queries:
+        return {
+            "papers": [],
+            "diagnostics": {
+                "status": "no_query",
+                "attempts": [],
+                "query_strategy": "No clean title, keyword, or fallback query could be generated.",
+            },
+        }
 
     timeout = aiohttp.ClientTimeout(total=20)
     paper_map: dict[str, dict] = {}
+    attempts: list[dict[str, Any]] = []
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for query in title_queries:
             try:
-                for paper in await _semantic_scholar_title_match(session, query, api_key):
-                    paper_map[_paper_key(paper)] = paper
+                papers = await _semantic_scholar_title_match(session, query, api_key)
+                added = _merge_attempt_results(paper_map, papers)
+                attempts.append({"type": "title_match", "query": query, "returned": len(papers), "added": added, "error": None})
             except Exception as exc:
+                attempts.append({"type": "title_match", "query": query, "returned": 0, "added": 0, "error": str(exc)})
                 logger.warning("Semantic Scholar title-match search failed for %r: %s", query, exc)
             try:
-                for paper in await _semantic_scholar_search(session, query, api_key, 10):
-                    paper_map.setdefault(_paper_key(paper), paper)
+                papers = await _semantic_scholar_search(session, query, api_key, 10)
+                added = _merge_attempt_results(paper_map, papers)
+                attempts.append({"type": "title_search", "query": query, "returned": len(papers), "added": added, "error": None})
             except Exception as exc:
+                attempts.append({"type": "title_search", "query": query, "returned": 0, "added": 0, "error": str(exc)})
                 logger.warning("Semantic Scholar exact-title search failed for %r: %s", query, exc)
 
         for query in deduped_keyword_queries:
             try:
-                for paper in await _semantic_scholar_search(session, query, api_key, 15):
-                    paper_map.setdefault(_paper_key(paper), paper)
+                papers = await _semantic_scholar_search(session, query, api_key, 15)
+                added = _merge_attempt_results(paper_map, papers)
+                attempts.append({"type": "keyword_search", "query": query, "returned": len(papers), "added": added, "error": None})
             except Exception as exc:
+                attempts.append({"type": "keyword_search", "query": query, "returned": 0, "added": 0, "error": str(exc)})
                 logger.warning("Semantic Scholar keyword search failed for %r: %s", query, exc)
 
-    papers = list(paper_map.values())
-    if not papers:
-        logger.warning("Semantic Scholar returned zero results for title/query: %s", clean_title or clean_search_query)
-        return []
+        if len(paper_map) < MIN_RELATED_PAPERS:
+            for query in reference_queries:
+                try:
+                    papers = await _semantic_scholar_search(session, query, api_key, 8)
+                    added = _merge_attempt_results(paper_map, papers)
+                    attempts.append({"type": "reference_fallback", "query": query, "returned": len(papers), "added": added, "error": None})
+                except Exception as exc:
+                    attempts.append({"type": "reference_fallback", "query": query, "returned": 0, "added": 0, "error": str(exc)})
+                    logger.warning("Semantic Scholar reference fallback failed for %r: %s", query, exc)
+                if len(paper_map) >= MIN_RELATED_PAPERS:
+                    break
 
-    normalized = [_normalize_semantic_paper(paper) for paper in papers]
-    duplicate_check = detect_publication_duplicate(clean_title, [], normalized)
-    duplicate_ids = {match.get("s2_paper_id") for match in duplicate_check.get("matches", [])}
+    normalized = _normalize_related_results(clean_title, paper_map)
+    status = "ok"
+    if not normalized:
+        status = "no_results"
+    elif len(normalized) < MIN_RELATED_PAPERS:
+        status = "limited_results"
+    fallback_used = any(attempt.get("type") == "reference_fallback" for attempt in attempts)
 
-    return sorted(
-        normalized,
-        key=lambda item: (
-            item.get("s2_paper_id") in duplicate_ids or item.get("duplicate_publication_match") is True,
-            item.get("citation_count") or 0,
-        ),
-        reverse=True,
+    return {
+        "papers": normalized,
+        "diagnostics": {
+            "status": status,
+            "attempts": attempts,
+            "clean_title": clean_title,
+            "clean_search_query": clean_search_query,
+            "keywords": keywords,
+            "reference_fallback_queries": reference_queries,
+            "result_count": len(normalized),
+            "query_strategy": (
+                "Title, keyword, and reference fallback searches were used."
+                if fallback_used
+                else "Title and keyword searches were used; reference fallback was available but not needed."
+                if reference_queries
+                else "Title and keyword searches were used."
+            ),
+        },
+    }
+
+
+async def search_related_papers(title: str, abstract: str, api_key: str, search_query: str = "") -> list[dict]:
+    """Backward-compatible helper returning only normalized related papers."""
+    result = await search_related_papers_with_diagnostics(
+        title=title,
+        abstract=abstract,
+        api_key=api_key,
+        search_query=search_query,
     )
+    return list(result.get("papers", []))

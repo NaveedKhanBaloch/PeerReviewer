@@ -232,6 +232,7 @@ async def run_pipeline(review_id: str, paper_bytes: Optional[bytes], arxiv_id: O
                 "field": "",
                 "research_analysis": {},
                 "related_papers": [],
+                "literature_search_diagnostics": {},
                 "openreview_examples_prompt": "",
                 "publication_check": {},
                 "research_llm_raw_output": "",
@@ -489,6 +490,7 @@ async def get_review(
             for item in related_papers
         ],
         research_llm_raw_output=review.research_llm_raw_output,
+        literature_search_diagnostics=research_raw.get("literature_search_diagnostics"),
         openreview_examples_prompt=research_raw.get("openreview_examples_prompt"),
         review_llm_raw_output=review.review_llm_raw_output,
         created_at=review.created_at,

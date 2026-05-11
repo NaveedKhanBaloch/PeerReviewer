@@ -14,7 +14,7 @@ from agent.progress import emit_progress
 from agent.prompts import RESEARCH_NODE_SYSTEM_PROMPT
 from agent.state import AgentState
 from core.config import settings
-from services.lit_search import search_related_papers, titles_match_exact
+from services.lit_search import search_related_papers_with_diagnostics, titles_match_exact
 from services.openreview_service import (
     fetch_openreview_examples,
     format_examples_for_prompt,
@@ -322,6 +322,7 @@ def _duplicate_publication_result(state: dict, publication_check: dict, related:
                 "extracted_title": state.get("title"),
                 "title_candidates_checked": state.get("title_candidates_checked", []),
                 "publication_check": publication_check,
+                "literature_search_diagnostics": state.get("literature_search_diagnostics", {}),
                 "action": "Skipped Gemini novelty and peer-review calls because the manuscript appears already published.",
             }
         ),
@@ -375,12 +376,16 @@ async def research_node(state: AgentState) -> dict:
 
         updates["progress_messages"].append("Searching related literature...")
         await emit_progress(state["review_id"], "literature", "Searching related literature")
-        related = await search_related_papers(
+        related_result = await search_related_papers_with_diagnostics(
             title=gemini_title,
             abstract=paper["abstract"],
             api_key=settings.SEMANTIC_SCHOLAR_API_KEY,
             search_query=semantic_scholar_query,
+            references=paper["references"],
         )
+        related = list(related_result.get("papers", []))
+        literature_diagnostics = dict(related_result.get("diagnostics", {}))
+        updates["literature_search_diagnostics"] = literature_diagnostics
         updates["title_candidates_checked"] = [value for value in [gemini_title, semantic_scholar_query, *query_keywords] if value]
 
         logger.info("Extracted title:\n%s\n", gemini_title or "(empty)")
@@ -437,9 +442,18 @@ async def research_node(state: AgentState) -> dict:
                 }
 
         updates["related_papers"] = related
-        updates["progress_messages"].append(
-            f"Found {len(related)} related papers on Semantic Scholar"
-        )
+        if literature_diagnostics.get("status") == "limited_results":
+            updates["progress_messages"].append(
+                f"Found only {len(related)} related papers after title, keyword, and reference fallback searches"
+            )
+        elif literature_diagnostics.get("status") == "no_results":
+            updates["progress_messages"].append(
+                "No related papers found after title, keyword, and reference fallback searches"
+            )
+        else:
+            updates["progress_messages"].append(
+                f"Found {len(related)} related papers on Semantic Scholar"
+            )
 
         updates["publication_check"] = publication_check
         if publication_check.get("status") == "already_published":
@@ -463,6 +477,17 @@ async def research_node(state: AgentState) -> dict:
 Related papers from Semantic Scholar:
 {json.dumps([{"title": p["title"], "abstract": p.get("abstract_snippet", ""), "year": p.get("year")} for p in related[:8]], indent=2)}
 
+Literature search diagnostics:
+{json.dumps({
+    "status": literature_diagnostics.get("status"),
+    "result_count": literature_diagnostics.get("result_count"),
+    "query_strategy": literature_diagnostics.get("query_strategy"),
+    "queries_attempted": [
+        {"type": attempt.get("type"), "query": attempt.get("query"), "returned": attempt.get("returned")}
+        for attempt in literature_diagnostics.get("attempts", [])[:8]
+    ],
+}, indent=2)}
+
 Publication duplicate check:
 {json.dumps(publication_check, indent=2)}
 
@@ -482,6 +507,7 @@ Analyse the novelty and field of this paper."""
                 "semantic_scholar_query": semantic_scholar_query,
                 "query_keywords": query_keywords,
                 "title_candidates_checked": updates["title_candidates_checked"],
+                "literature_search_diagnostics": literature_diagnostics,
                 "gemini_output": raw_output,
             }
         )

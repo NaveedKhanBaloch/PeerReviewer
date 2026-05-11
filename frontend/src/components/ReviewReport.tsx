@@ -20,6 +20,18 @@ function recommendationLabel(status: string, recommendation: string | null, over
   return 'Pending';
 }
 
+function literatureDiagnostics(data: { literature_search_diagnostics?: unknown; research_llm_raw_output?: string | null }) {
+  if (data.literature_search_diagnostics && typeof data.literature_search_diagnostics === 'object') {
+    return data.literature_search_diagnostics as { status?: string; result_count?: number; query_strategy?: string };
+  }
+  try {
+    const parsed = JSON.parse(data.research_llm_raw_output || '{}');
+    return parsed.literature_search_diagnostics || null;
+  } catch {
+    return null;
+  }
+}
+
 function Section({
   title,
   children,
@@ -75,6 +87,16 @@ export function ReviewReport() {
     : publishedMatch?.year
       ? `Published in ${publishedMatch.year}.`
       : 'A matching published record was found.';
+  const diagnostics = literatureDiagnostics(data);
+  const literatureStatus = diagnostics?.status;
+  const showLiteratureNotice = literatureStatus === 'limited_results' || literatureStatus === 'no_results' || literatureStatus === 'no_query';
+  const literatureNotice = literatureStatus === 'limited_results'
+    ? `Limited literature match found. The system found ${diagnostics?.result_count ?? data.related_papers.length} related paper${(diagnostics?.result_count ?? data.related_papers.length) === 1 ? '' : 's'} after broadening the search.`
+    : literatureStatus === 'no_results'
+      ? 'No reliable related literature match was found after title, keyword, and reference fallback searches.'
+      : literatureStatus === 'no_query'
+        ? 'No clean literature-search query could be generated from the manuscript metadata.'
+        : '';
 
   return (
     <div className="space-y-6">
@@ -175,6 +197,12 @@ export function ReviewReport() {
       </Section>
 
       <Section title="Related Literature" icon={<BookOpen className="h-4 w-4" />}>
+        {showLiteratureNotice ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            <div className="font-semibold">{literatureNotice}</div>
+            {diagnostics?.query_strategy ? <div className="mt-1 text-amber-800">{diagnostics.query_strategy}</div> : null}
+          </div>
+        ) : null}
         {data.related_papers.length === 0 ? (
           <div className="text-slate-500">No related papers found.</div>
         ) : (

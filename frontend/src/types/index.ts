@@ -94,6 +94,12 @@ export interface FullReview {
   dimension_scores: DimensionScore[];
   related_papers: RelatedPaper[];
   research_llm_raw_output?: string | null;
+  literature_search_diagnostics?: {
+    status?: string;
+    result_count?: number;
+    query_strategy?: string;
+    attempts?: Array<{ type?: string; query?: string; returned?: number; added?: number; error?: string | null }>;
+  } | null;
   openreview_examples_prompt?: string | null;
   review_llm_raw_output?: string | null;
   created_at: string;
